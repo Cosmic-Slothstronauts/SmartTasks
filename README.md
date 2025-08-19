@@ -14,6 +14,7 @@ Lightweight task graph editor: drag nodes, link/unlink tasks, write Markdown des
 * Per-task description with Markdown preview (global Edit/Preview toggle)
 * Autosave to `localStorage` (positions, titles, descriptions, link graph, expanded state)
 * Dark/light theme toggle with persistence
+* Optional semantic colouring of tasks via on-device embeddings
 
 ## Quick start (local)
 
