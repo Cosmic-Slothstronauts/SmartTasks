@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TaskHeat — POC (v5 restore)</title>
+<style>
+  :root {
+    --bg: #f5f7fb;
+    --panel: #ffffff;
+    --panel-alpha: #ffffffcc;
+    --text: #0f172a;
+    --muted: #5b6478;
+    --border: #e3e7ef;
+    --node-bg: #fbfdff;
+    --node-border: #c8d1e1;
+    --link: #444;
+    --accent: #1f57ff;
+    --accent-2: #0ea5e9;
+    --shadow: 0 12px 24px rgba(15, 23, 42, 0.15);
+  }
+  html[data-theme="dark"] {
+    --bg: #0b1020;
+    --panel: #0f172a;
+    --panel-alpha: #0f172acc;
+    --text: #e5e7eb;
+    --muted: #9aa4b2;
+    --border: #1f2a44;
+    --node-bg: #121a2f;
+    --node-border: #293552;
+    --link: #cbd5e1;
+    --accent: #5b7cff;
+    --accent-2: #22c2ff;
+    --shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+  }
+
+  html, body { height: 100%; margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  #app { display: grid; grid-template-rows: auto 1fr 160px; height: 100%; }
+
+  /* Topbar */
+  #topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px; border-bottom: 1px solid var(--border); background: var(--panel-alpha); backdrop-filter: saturate(140%) blur(4px); }
+  .iconbtn { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 10px; cursor: pointer; }
+  .iconbtn:hover { background: var(--panel); }
+  .right { display: flex; align-items: center; gap: 8px; }
+  .hint { color: var(--muted); font-size: 12px; }
+
+  /* Command palette */
+  #palette { position: fixed; top: 54px; left: 10px; width: 320px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 8px; display: none; z-index: 1200; }
+  #palInput { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text); }
+  .pal-list { margin-top: 8px; display: grid; gap: 6px; }
+  .pal-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+  .pal-kbd { font-size: 11px; color: var(--muted); }
+
+  /* Canvas */
+  #canvasWrap { position: relative; background: var(--panel); overflow: hidden; }
+  #linkLayer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #nodesLayer { position: absolute; inset: 0; }
+  line[data-link] { stroke: var(--link); stroke-width: 2.2; }
+
+  /* Node */
+  .node { position: absolute; min-width: 180px; max-width: 360px; border: 1px solid var(--node-border); border-radius: 10px; background: var(--node-bg); box-shadow: 0 2px 14px rgba(20,32,75,0.06); user-select: none; touch-action: none; }
+  .node.selected { outline: 2px solid var(--accent-2); }
+  .node-header { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 8px 10px; }
+  .node-title { font-weight: 700; line-height: 1.2; padding: 4px; border-radius: 6px; }
+  .node-title-input { width: 100%; border: 1px solid var(--node-border); background: var(--panel); color: var(--text); font: inherit; padding: 6px 8px; border-radius: 8px; box-sizing: border-box; }
+  .toggle-desc { border: none; background: transparent; cursor: pointer; font-size: 14px; padding: 4px 6px; border-radius: 6px; }
+  .toggle-desc:focus { outline: 2px solid var(--accent-2); }
+
+  .node-desc { margin: 0 10px 10px 10px; border-top: 1px solid var(--border); overflow: hidden; max-height: 0; opacity: 0; transition: max-height .2s ease, opacity .2s ease; }
+  .node-desc.open { max-height: 420px; opacity: 1; }
+  .node-desc textarea { width: 100%; min-height: 110px; resize: vertical; box-sizing: border-box; border: 1px solid var(--node-border); padding: 8px 10px; border-radius: 8px; background: var(--panel); color: var(--text); }
+  .desc-preview { width: 100%; min-height: 110px; box-sizing: border-box; border: 1px dashed var(--node-border); padding: 10px 12px; border-radius: 8px; background: var(--panel); color: var(--text); }
+
+  /* Debug */
+  #debug { border-top: 1px solid var(--border); background: var(--panel); padding: 8px 10px; display: grid; grid-template-rows: auto 1fr; gap: 6px; }
+  #logList { margin: 0; padding: 0 0 0 18px; overflow: auto; }
+
+  /* Context menu */
+  #ctxMenu { position: fixed; z-index: 1000; min-width: 210px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 6px; display: none; box-shadow: var(--shadow); }
+  .ctx-section { margin: 6px 0; border-top: 1px solid var(--border); }
+  .ctx-item { display: flex; padding: 8px 10px; border: none; background: transparent; cursor: pointer; border-radius: 8px; color: var(--text); }
+  .ctx-item:hover { background: var(--bg); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="left"><button id="menuBtn" class="iconbtn" title="Open command menu">☰</button><span id="title" style="margin-left:8px;font-weight:700">TaskHeat — POC</span></div>
+    <div class="right">
+      <span class="hint" id="modeHint">Tip: L to link, U to unlink. Long‑press for node menu.</span>
+      <button id="viewModeBtn" class="iconbtn" title="Toggle Edit/Preview">👁 Preview</button>
+      <button id="themeBtn" class="iconbtn" title="Toggle dark/light">🌙</button>
+    </div>
+  </div>
+
+  <div id="palette" role="dialog" aria-modal="true">
+    <input id="palInput" placeholder="Task title…" />
+    <div class="pal-list">
+      <div class="pal-item" data-cmd="create"><span>Create task</span><span class="pal-kbd">Enter</span></div>
+      <div class="pal-item" data-cmd="link"><span>Start link mode</span><span class="pal-kbd">L</span></div>
+      <div class="pal-item" data-cmd="unlink"><span>Start unlink mode</span><span class="pal-kbd">U</span></div>
+      <div class="pal-item" data-cmd="cancel"><span>Cancel current mode</span><span class="pal-kbd">Esc</span></div>
+      <div class="pal-item" data-cmd="deleteSelected"><span>Delete selected node</span><span class="pal-kbd">Del</span></div>
+    </div>
+  </div>
+
+  <div id="canvasWrap">
+    <svg id="linkLayer" aria-hidden="true">
+      <defs>
+        <marker id="arrow" markerWidth="12" markerHeight="8" refX="10" refY="4" orient="auto-start-reverse">
+          <path d="M0,0 L12,4 L0,8 Z" fill="currentColor"></path>
+        </marker>
+      </defs>
+    </svg>
+    <div id="nodesLayer"></div>
+  </div>
+
+  <div id="debug"><div><strong>Debug Log</strong></div><ol id="logList"></ol></div>
+</div>
+
+<div id="ctxMenu" role="menu" aria-hidden="true">
+  <button class="ctx-item" data-action="addHere">➕ Add task here</button>
+  <div class="ctx-section"></div>
+  <button class="ctx-item" data-action="startLink">🔗 Start link from this</button>
+  <button class="ctx-item" data-action="startUnlink">🧹 Start unlink from this</button>
+  <div class="ctx-section"></div>
+  <button class="ctx-item" data-action="updateDesc">📝 Update description</button>
+  <button class="ctx-item" data-action="rename">✏️ Rename title</button>
+  <button class="ctx-item" data-action="delete">🗑️ Delete task</button>
+</div>
+
+<script>
+(function(){
+  // Keys & state
+  const STORAGE_KEY = 'taskheat.v5restore';
+  const THEME_KEY = 'taskheat.theme';
+  const VIEW_KEY = 'taskheat.view';
+
+  const menuBtn = document.getElementById('menuBtn');
+  const viewModeBtn = document.getElementById('viewModeBtn');
+  const themeBtn = document.getElementById('themeBtn');
+  const palette = document.getElementById('palette');
+  const palInput = document.getElementById('palInput');
+  const modeHint = document.getElementById('modeHint');
+  const nodesLayer = document.getElementById('nodesLayer');
+  const linkLayer = document.getElementById('linkLayer');
+  const canvasWrap = document.getElementById('canvasWrap');
+  const ctxMenu = document.getElementById('ctxMenu');
+  const logList = document.getElementById('logList');
+
+  let nextId = 1;
+  const nodes = new Map(); // id -> { el, titleEl, toggleEl, descWrap, ta, previewEl }
+  const links = []; // { from, to, el }
+  let mode = 'idle'; // 'idle'|'link'|'unlink'
+  let firstPickId = null;
+  let selectedId = null;
+  let ctxTargetId = null;
+  let lastContextPos = {x:0,y:0};
+
+  // Theme
+  const savedTheme = localStorage.getItem(THEME_KEY);
+  if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+  updateThemeIcon();
+  themeBtn.addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', cur);
+    localStorage.setItem(THEME_KEY, cur);
+    updateThemeIcon();
+  });
+  function updateThemeIcon(){ themeBtn.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙'; }
+
+  // Global view toggle
+  let viewMode = localStorage.getItem(VIEW_KEY) || 'edit';
+  updateViewButton();
+  viewModeBtn.addEventListener('click', () => {
+    viewMode = viewMode === 'edit' ? 'preview' : 'edit';
+    localStorage.setItem(VIEW_KEY, viewMode);
+    updateViewButton();
+    applyViewModeToAll();
+  });
+  function updateViewButton(){ viewModeBtn.textContent = viewMode === 'edit' ? '👁 Preview' : '✍️ Edit'; }
+
+  // Palette
+  menuBtn.addEventListener('click', () => togglePalette());
+  function togglePalette(){ const open = palette.style.display === 'block'; palette.style.display = open ? 'none':'block'; if (!open){ palInput.focus(); palInput.select(); } }
+  document.addEventListener('click', (e)=>{ if (!palette.contains(e.target) && e.target !== menuBtn) palette.style.display='none'; });
+  palette.addEventListener('click', (e)=>{ const it=e.target.closest('[data-cmd]'); if (!it) return; runCommand(it.dataset.cmd); });
+  palInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter') runCommand('create'); });
+
+  window.addEventListener('keydown', (e)=>{
+    if (e.key==='Escape') setMode('idle');
+    if (e.key.toLowerCase()==='l') setMode('link');
+    if (e.key.toLowerCase()==='u') setMode('unlink');
+    if (e.key==='Delete' && selectedId!=null && !isTypingTarget(e.target)) { deleteNode(selectedId); saveAll(); }
+  });
+  function isTypingTarget(t){ return t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable); }
+
+  function runCommand(cmd){
+    if (cmd==='create'){ const title = palInput.value.trim()||undefined; createNode({ title }); saveAll(); palInput.value=''; palette.style.display='none'; return; }
+    if (cmd==='link'){ setMode('link'); palette.style.display='none'; return; }
+    if (cmd==='unlink'){ setMode('unlink'); palette.style.display='none'; return; }
+    if (cmd==='cancel'){ setMode('idle'); palette.style.display='none'; return; }
+    if (cmd==='deleteSelected'){ if (selectedId!=null) { deleteNode(selectedId); saveAll(); } palette.style.display='none'; return; }
+  }
+
+  function setMode(m){ nodes.forEach(n=>n.el.classList.remove('selected')); firstPickId=null; mode=m; if(m==='link') setHint('Link mode: click source, then target. Esc cancels.'); else if(m==='unlink') setHint('Unlink mode: click two connected nodes. Esc cancels.'); else setHint('Tip: L to link, U to unlink.'); }
+  function setHint(t){ modeHint.textContent=t; }
+
+  // Log
+  function logAction(t){ const li=document.createElement('li'); li.textContent='['+new Date().toLocaleTimeString()+'] '+t; logList.appendChild(li); logList.scrollTop=logList.scrollHeight; }
+
+  // Markdown
+  function escapeHTML(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function renderMarkdown(src){ if(!src) return ''; let s=src.replace(/\r\n?/g,'\n'); const fences=[]; s=s.replace(/```([\s\S]*?)```/g,(_,c)=>{ fences.push(c); return `\uE000${fences.length-1}\uE000`; }); s=escapeHTML(s); s=s.replace(/^###\s+(.*)$/gm,'<h3>$1</h3>').replace(/^##\s+(.*)$/gm,'<h2>$1</h2>').replace(/^#\s+(.*)$/gm,'<h1>$1</h1>'); s=s.replace(/^(?:- |\* |\+ )(.*)$/gm,'<li>$1</li>'); s=s.replace(/(?:<li>[\s\S]*?<\/li>\n?)+/g,m=>'\n<ul>'+m.replace(/\n/g,'')+'</ul>\n'); s=s.replace(/\[(.+?)\]\((https?:[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>'); s=s.replace(/`([^`]+?)`/g,'<code>$1<\/code>'); s=s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>'); s=s.replace(/\*(?!\s)([^*]+?)\*/g,'<em>$1</em>'); s=s.replace(/\n\n+/g,'<br><br>').replace(/\n/g,'<br>'); s=s.replace(/\uE000(\d+)\uE000/g,(_,i)=>`<pre><code>${escapeHTML(fences[Number(i)])}</code></pre>`); return s; }
+
+  // Geometry
+  function nodeCenter(el){ const cr=canvasWrap.getBoundingClientRect(); const r=el.getBoundingClientRect(); return {x:(r.left-cr.left)+r.width/2, y:(r.top-cr.top)+r.height/2}; }
+  function updateLinkPosition(link){ const a=nodes.get(link.from)?.el, b=nodes.get(link.to)?.el; if(!a||!b) return; const ca=nodeCenter(a), cb=nodeCenter(b); link.el.setAttribute('x1',ca.x); link.el.setAttribute('y1',ca.y); link.el.setAttribute('x2',cb.x); link.el.setAttribute('y2',cb.y); }
+  function updateLinksForNode(id){ links.forEach(l=>{ if(l.from===id||l.to===id) updateLinkPosition(l); }); }
+
+  // Links
+  function addLink(fromId,toId){ if(fromId===toId) return; if(links.some(l=>l.from===fromId&&l.to===toId)) return; const line=document.createElementNS('http://www.w3.org/2000/svg','line'); line.setAttribute('marker-end','url(#arrow)'); line.setAttribute('data-link',''); linkLayer.appendChild(line); const l={from:fromId,to:toId,el:line}; links.push(l); updateLinkPosition(l); logAction('Linked #'+fromId+' → #'+toId); saveAll(); }
+  function removeLinkBetween(a,b){ let removed=0; for(let i=links.length-1;i>=0;i--){ const l=links[i]; const m=(l.from===a&&l.to===b)||(l.from===b&&l.to===a); if(m){ l.el.remove(); links.splice(i,1); removed++; } } logAction(removed?('Removed link(s) between #'+a+' and #'+b+' ('+removed+')'):'No link found'); if(removed) saveAll(); }
+
+  // Nodes
+  function createNode({id,title,x,y,desc,descOpen}={}){
+    const useId = id ?? nextId++;
+    if(useId>=nextId) nextId=useId+1;
+
+    const el=document.createElement('div'); el.className='node'; el.dataset.id=useId;
+    el.style.left=(typeof x==='number'?x:40*useId)+'px'; el.style.top=(typeof y==='number'?y:40*useId)+'px';
+
+    const header=document.createElement('div'); header.className='node-header';
+    const titleEl=document.createElement('div'); titleEl.className='node-title'; titleEl.textContent=title||('Task '+useId);
+    const toggle=document.createElement('button'); toggle.className='toggle-desc'; toggle.title='Toggle description'; toggle.textContent=descOpen?'▾':'▸';
+    header.appendChild(titleEl); header.appendChild(toggle);
+
+    const descWrap=document.createElement('div'); descWrap.className='node-desc'; if(descOpen) descWrap.classList.add('open');
+    const ta=document.createElement('textarea'); ta.placeholder='Markdown description…'; ta.value=desc||'';
+    const preview=document.createElement('div'); preview.className='desc-preview'; preview.style.display='none';
+    descWrap.appendChild(ta); descWrap.appendChild(preview);
+
+    el.appendChild(header); el.appendChild(descWrap);
+    nodesLayer.appendChild(el);
+
+    nodes.set(useId,{ el, titleEl, toggleEl:toggle, descWrap, ta, previewEl:preview });
+
+    // Select node on press
+    el.addEventListener('pointerdown',()=>{ selectedId=useId; nodes.forEach(n=>n.el.classList.remove('selected')); el.classList.add('selected'); });
+
+    // Link/unlink by clicks while in mode
+    el.addEventListener('click',(e)=>{ if(e.target===toggle || e.target===ta) return; if(mode==='idle') return; const thisId=useId; if(firstPickId==null){ firstPickId=thisId; el.classList.add('selected'); setHint((mode==='link'?'Link':'Unlink')+': pick second node.'); } else if(firstPickId!==thisId){ const firstEl=nodes.get(firstPickId)?.el; firstEl?.classList.remove('selected'); if(mode==='link') addLink(firstPickId,thisId); else removeLinkBetween(firstPickId,thisId); firstPickId=null; setMode('idle'); } });
+
+    // Toggle description
+    toggle.addEventListener('click',(e)=>{ e.stopPropagation(); const open=!descWrap.classList.contains('open'); descWrap.classList.toggle('open'); toggle.textContent=open?'▾':'▸'; if(open) ta.focus(); saveAll(); });
+
+    // Inline rename on double click
+    titleEl.addEventListener('dblclick',(e)=>{ e.stopPropagation(); startInlineTitleRename(useId); });
+
+    // Context menu
+    el.addEventListener('contextmenu',(e)=>{ e.preventDefault(); e.stopPropagation(); ctxTargetId=useId; showContextMenu(e.clientX,e.clientY,true); });
+
+    // Dragging
+    makeDraggable(el,useId);
+
+    // Apply global view mode
+    applyViewModeToNode(useId);
+
+    // Autosave while typing; live preview when in preview mode
+    ta.addEventListener('input',()=>{ if(viewMode==='preview') preview.innerHTML=renderMarkdown(ta.value); saveAll(); });
+
+    logAction('Created node #'+useId);
+    return useId;
+  }
+
+  function startInlineTitleRename(id){ const entry=nodes.get(id); if(!entry) return; const {el,titleEl}=entry; if(el.classList.contains('editing')) return; el.classList.add('editing'); const original=titleEl.textContent||''; titleEl.textContent=''; const inp=document.createElement('input'); inp.type='text'; inp.className='node-title-input'; inp.value=original; inp.addEventListener('pointerdown',e=>e.stopPropagation()); const commit=(save)=>{ const v=save?inp.value.trim():original; titleEl.textContent=v||('Task '+id); el.classList.remove('editing'); saveAll(); }; inp.addEventListener('keydown',e=>{ if(e.key==='Enter') commit(true); if(e.key==='Escape') commit(false); }); inp.addEventListener('blur',()=>commit(true)); titleEl.appendChild(inp); setTimeout(()=>{ inp.focus(); inp.select(); },0); }
+
+  function deleteNode(id){ const entry=nodes.get(id); if(!entry) return; for(let i=links.length-1;i>=0;i--){ const l=links[i]; if(l.from===id||l.to===id){ l.el.remove(); links.splice(i,1); } } entry.el.remove(); nodes.delete(id); if(selectedId===id) selectedId=null; logAction('Deleted node #'+id); }
+
+  // Dragging
+  function makeDraggable(el,id){ let startX=0,startY=0,origL=0,origT=0; const onDown=(e)=>{ if(e.button!==undefined&&e.button!==0) return; const t=e.target; if (t.tagName==='TEXTAREA' || t.classList.contains('node-title-input') || t.closest('button') || t.closest('a')) return; el.setPointerCapture?.(e.pointerId); startX=e.clientX; startY=e.clientY; origL=parseFloat(el.style.left)||0; origT=parseFloat(el.style.top)||0; window.addEventListener('pointermove',onMove); window.addEventListener('pointerup',onUp,{once:true}); }; const onMove=(e)=>{ const dx=e.clientX-startX, dy=e.clientY-startY; el.style.left=(origL+dx)+'px'; el.style.top=(origT+dy)+'px'; updateLinksForNode(id); }; const onUp=()=>{ window.removeEventListener('pointermove',onMove); saveAll(); }; el.addEventListener('pointerdown',onDown); setupLongPress(el,(pt)=>{ ctxTargetId=id; showContextMenu(pt.clientX,pt.clientY,true); }); }
+
+  // Context menu
+  function showContextMenu(x,y,forNode){ lastContextPos=pageToCanvasPoint({clientX:x,clientY:y}); ctxMenu.style.left=x+'px'; ctxMenu.style.top=y+'px'; ctxMenu.style.display='block'; ctxMenu.querySelectorAll('[data-action="startLink"], [data-action="startUnlink"], [data-action="rename"], [data-action="updateDesc"], [data-action="delete"]').forEach(el=>{ el.style.display=forNode?'flex':'none'; }); }
+  function hideContextMenu(){ ctxMenu.style.display='none'; }
+  window.addEventListener('click', (e)=>{ if (!ctxMenu.contains(e.target)) hideContextMenu(); });
+  canvasWrap.addEventListener('contextmenu',(e)=>{ if(e.target===canvasWrap||e.target===linkLayer){ e.preventDefault(); ctxTargetId=null; showContextMenu(e.clientX,e.clientY,false); } });
+
+  ctxMenu.addEventListener('click',(e)=>{ const btn=e.target.closest('[data-action]'); if(!btn) return; e.stopPropagation(); const act=btn.dataset.action; hideContextMenu(); if(act==='addHere'){ const name=prompt('Task title'); if(name!==null){ createNode({title:(name||'').trim(), x:lastContextPos.x, y:lastContextPos.y}); saveAll(); } return; } if(ctxTargetId!=null){ const n=nodes.get(ctxTargetId); if(!n) return; if(act==='startLink'){ setMode('link'); firstPickId=ctxTargetId; n.el.classList.add('selected'); setHint('Link: pick a target node.'); } else if(act==='startUnlink'){ setMode('unlink'); firstPickId=ctxTargetId; n.el.classList.add('selected'); setHint('Unlink: pick the other node.'); } else if(act==='rename'){ startInlineTitleRename(ctxTargetId); } else if(act==='updateDesc'){ if(!n.descWrap.classList.contains('open')){ n.descWrap.classList.add('open'); n.toggleEl.textContent='▾'; } n.ta.focus(); } else if(act==='delete'){ deleteNode(ctxTargetId); saveAll(); } } });
+
+  // Long‑press
+  const LONG_PRESS_MS=500, MOVE_CANCEL_PX=8; function setupLongPress(target,onFire){ let timer=null, sx=0, sy=0; const clear=()=>{ if(timer){ clearTimeout(timer); timer=null; } }; const onDown=(e)=>{ if(e.button!==undefined&&e.button!==0) return; sx=e.clientX; sy=e.clientY; clear(); timer=setTimeout(()=>onFire({clientX:e.clientX, clientY:e.clientY}), LONG_PRESS_MS); }; const onMove=(e)=>{ if(!timer) return; if(Math.abs(e.clientX-sx)>MOVE_CANCEL_PX || Math.abs(e.clientY-sy)>MOVE_CANCEL_PX) clear(); }; const onUp=()=>clear(); target.addEventListener('pointerdown',onDown); target.addEventListener('pointermove',onMove); target.addEventListener('pointerup',onUp); target.addEventListener('pointercancel',onUp); target.addEventListener('pointerleave',onUp); }
+  function pageToCanvasPoint(pt){ const r=canvasWrap.getBoundingClientRect(); return {x: pt.clientX - r.left, y: pt.clientY - r.top}; }
+  setupLongPress(canvasWrap,(pt)=>{ const el=document.elementFromPoint(pt.clientX,pt.clientY); if(el && (el.closest('.node') || el===linkLayer)) return; ctxTargetId=null; showContextMenu(pt.clientX,pt.clientY,false); });
+
+  // View mode
+  function applyViewModeToNode(id){ const n=nodes.get(id); if(!n) return; if(viewMode==='edit'){ n.ta.style.display='block'; n.previewEl.style.display='none'; } else { n.ta.style.display='none'; n.previewEl.style.display='block'; n.previewEl.innerHTML = renderMarkdown(n.ta.value); } }
+  function applyViewModeToAll(){ nodes.forEach((_,id)=>applyViewModeToNode(id)); }
+
+  // Persistence
+  function saveAll(){ const state={ nextId, nodes:{}, links: links.map(l=>[l.from,l.to]) }; nodes.forEach((n,id)=>{ state.nodes[id]={ id, title: n.titleEl.textContent, desc: n.ta.value, x: parseFloat(n.el.style.left)||0, y: parseFloat(n.el.style.top)||0, descOpen: n.descWrap.classList.contains('open') }; }); localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  function loadAll(){ try { return JSON.parse(localStorage.getItem(STORAGE_KEY)||''); } catch { return null; } }
+
+  // Bootstrap
+  function bootstrap(){ const s=loadAll(); if(s && s.nodes){ const ids=Object.keys(s.nodes).map(Number).sort((a,b)=>a-b); ids.forEach(id=>{ const n=s.nodes[id]; createNode({id:n.id, title:n.title, x:n.x, y:n.y, desc:n.desc, descOpen:n.descOpen}); }); nextId = Math.max(s.nextId||1, Math.max(0,...ids)+1); if (Array.isArray(s.links)) s.links.forEach(([f,t])=>addLink(f,t)); applyViewModeToAll(); logAction('Restored from localStorage'); } else { const a=createNode({title:'Plan feature', x:60, y:60, desc:'- Outline tasks\n- Define links'}); const b=createNode({title:'Implement MVP', x:280, y:160, desc:'Core features:\n- Drag\n- Links\n- Markdown'}); const c=createNode({title:'Test basic flow', x:520, y:80, desc:'Smoke test interactions'}); addLink(a,b); addLink(b,c); applyViewModeToAll(); saveAll(); } }
+
+  window.addEventListener('resize', ()=>{ links.forEach(updateLinkPosition); });
+
+  bootstrap();
+})();
+</script>
+</body>
+</html>
