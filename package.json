@@ -1,0 +1,8 @@
+{
+  "name": "smarttasks",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node verify.js"
+  }
+}
