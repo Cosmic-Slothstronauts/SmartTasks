@@ -471,7 +471,7 @@
       console.log('Loading UMAP module...');
       try {
         umapMod = await import('https://esm.sh/umap-js@1.0.2');
-        console.log('UMAP module loaded successfully', umapMod);
+        console.log('UMAP module loaded successfully. Exported keys:', Object.keys(umapMod));
       } catch (err) {
         console.error('UMAP load failed:', err);
         logAction('Semantics unavailable (UMAP load failed).');
