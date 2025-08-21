@@ -41,6 +41,7 @@
   #topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px; border-bottom: 1px solid var(--border); background: var(--panel-alpha); backdrop-filter: saturate(140%) blur(4px); }
   .iconbtn { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 10px; cursor: pointer; }
   .iconbtn:hover { background: var(--panel); }
+  .iconbtn.active { background: var(--accent); color: #fff; }
   .right { display: flex; align-items: center; gap: 8px; }
   .hint { color: var(--muted); font-size: 12px; }
 
@@ -89,6 +90,8 @@
     <div class="right">
       <span class="hint" id="modeHint">Tip: L to link, U to unlink. Long‑press for node menu.</span>
       <button id="viewModeBtn" class="iconbtn" title="Toggle Edit/Preview">👁 Preview</button>
+      <button id="recomputeBtn" class="iconbtn" title="Recompute semantic colours" disabled>↻ Recompute</button>
+      <button id="semanticBtn" class="iconbtn" title="Toggle semantic colouring">🎨 Semantics</button>
       <button id="themeBtn" class="iconbtn" title="Toggle dark/light">🌙</button>
     </div>
   </div>
@@ -139,6 +142,8 @@
   const menuBtn = document.getElementById('menuBtn');
   const viewModeBtn = document.getElementById('viewModeBtn');
   const themeBtn = document.getElementById('themeBtn');
+  const semanticBtn = document.getElementById('semanticBtn');
+  const recomputeBtn = document.getElementById('recomputeBtn');
   const palette = document.getElementById('palette');
   const palInput = document.getElementById('palInput');
   const modeHint = document.getElementById('modeHint');
@@ -148,6 +153,8 @@
   const ctxMenu = document.getElementById('ctxMenu');
   const logList = document.getElementById('logList');
 
+  const DEV_SEMANTICS_METRICS = false;
+
   let nextId = 1;
   const nodes = new Map(); // id -> { el, titleEl, toggleEl, descWrap, ta, previewEl }
   const links = []; // { from, to, el }
@@ -155,7 +162,18 @@
   let firstPickId = null;
   let selectedId = null;
   let ctxTargetId = null;
-  let lastContextPos = {x:0,y:0};
+    let lastContextPos = {x:0,y:0};
+    let lastDeleted = null; // for undo
+
+  // Semantic colouring
+  const SEM_ON_KEY = 'taskheat.semantic.on';
+  const SEM_CACHE_KEY = 'taskheat.semantic.cache';
+  let semanticsOn = localStorage.getItem(SEM_ON_KEY) === '1';
+  let semanticCache = loadSemanticCache();
+  const dirtyNodes = new Set();
+  let recomputeTimer = null;
+  if(semanticsOn){ semanticBtn.classList.add('active'); }
+  recomputeBtn.disabled = !semanticsOn;
 
   // Theme
   const savedTheme = localStorage.getItem(THEME_KEY);
@@ -180,6 +198,31 @@
   });
   function updateViewButton(){ viewModeBtn.textContent = viewMode === 'edit' ? '👁 Preview' : '✍️ Edit'; }
 
+  // Semantic controls
+  recomputeBtn.addEventListener('click', async ()=> {
+    if (!semanticsOn) return;
+    try { await computeEmbeddingsFor([...nodes.keys()]); }
+    catch { /* already logged; leave UI usable */ }
+  });
+
+  semanticBtn.addEventListener('click', async () => {
+    semanticsOn = !semanticsOn;
+    semanticBtn.classList.toggle('active', semanticsOn);
+    recomputeBtn.disabled = !semanticsOn;
+    localStorage.setItem(SEM_ON_KEY, semanticsOn ? '1' : '0');
+    if (semanticsOn) {
+      try { await computeEmbeddingsFor([...nodes.keys()]); }
+      catch {
+        semanticsOn = false;
+        localStorage.setItem(SEM_ON_KEY, '0');
+        semanticBtn.classList.remove('active');
+        recomputeBtn.disabled = true;
+      }
+    } else {
+      clearSemanticColors();
+    }
+  });
+
   // Palette
   menuBtn.addEventListener('click', () => togglePalette());
   function togglePalette(){ const open = palette.style.display === 'block'; palette.style.display = open ? 'none':'block'; if (!open){ palInput.focus(); palInput.select(); } }
@@ -192,6 +235,10 @@
     if (e.key.toLowerCase()==='l') setMode('link');
     if (e.key.toLowerCase()==='u') setMode('unlink');
     if (e.key==='Delete' && selectedId!=null && !isTypingTarget(e.target)) { deleteNode(selectedId); saveAll(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !isTypingTarget(e.target)) {
+      e.preventDefault();
+      undoDelete();
+    }
   });
   function isTypingTarget(t){ return t && (t.tagName==='INPUT' || t.tagName==='TEXTAREA' || t.isContentEditable); }
 
@@ -267,15 +314,147 @@
     applyViewModeToNode(useId);
 
     // Autosave while typing; live preview when in preview mode
-    ta.addEventListener('input',()=>{ if(viewMode==='preview') preview.innerHTML=renderMarkdown(ta.value); saveAll(); });
+    ta.addEventListener('input',()=>{ if(viewMode==='preview') preview.innerHTML=renderMarkdown(ta.value); saveAll(); markNodeDirty(useId); });
 
     logAction('Created node #'+useId);
+    if(semanticsOn){ markNodeDirty(useId); }
     return useId;
   }
 
-  function startInlineTitleRename(id){ const entry=nodes.get(id); if(!entry) return; const {el,titleEl}=entry; if(el.classList.contains('editing')) return; el.classList.add('editing'); const original=titleEl.textContent||''; titleEl.textContent=''; const inp=document.createElement('input'); inp.type='text'; inp.className='node-title-input'; inp.value=original; inp.addEventListener('pointerdown',e=>e.stopPropagation()); const commit=(save)=>{ const v=save?inp.value.trim():original; titleEl.textContent=v||('Task '+id); el.classList.remove('editing'); saveAll(); }; inp.addEventListener('keydown',e=>{ if(e.key==='Enter') commit(true); if(e.key==='Escape') commit(false); }); inp.addEventListener('blur',()=>commit(true)); titleEl.appendChild(inp); setTimeout(()=>{ inp.focus(); inp.select(); },0); }
+  function startInlineTitleRename(id){ const entry=nodes.get(id); if(!entry) return; const {el,titleEl}=entry; if(el.classList.contains('editing')) return; el.classList.add('editing'); const original=titleEl.textContent||''; titleEl.textContent=''; const inp=document.createElement('input'); inp.type='text'; inp.className='node-title-input'; inp.value=original; inp.addEventListener('pointerdown',e=>e.stopPropagation()); const commit=(save)=>{ const v=save?inp.value.trim():original; if(v!==original) markNodeDirty(id); titleEl.textContent=v||('Task '+id); el.classList.remove('editing'); saveAll(); }; inp.addEventListener('keydown',e=>{ if(e.key==='Enter') commit(true); if(e.key==='Escape') commit(false); }); inp.addEventListener('blur',()=>commit(true)); titleEl.appendChild(inp); setTimeout(()=>{ inp.focus(); inp.select(); },0); }
 
-  function deleteNode(id){ const entry=nodes.get(id); if(!entry) return; for(let i=links.length-1;i>=0;i--){ const l=links[i]; if(l.from===id||l.to===id){ l.el.remove(); links.splice(i,1); } } entry.el.remove(); nodes.delete(id); if(selectedId===id) selectedId=null; logAction('Deleted node #'+id); }
+    function deleteNode(id){
+      const entry=nodes.get(id); if(!entry) return;
+      if (!confirm('Delete this task?')) return;
+      lastDeleted = {
+        id,
+        title: entry.titleEl.textContent,
+        desc: entry.ta.value,
+        x: parseFloat(entry.el.style.left)||0,
+        y: parseFloat(entry.el.style.top)||0,
+        descOpen: entry.descWrap.classList.contains('open')
+      };
+      for(let i=links.length-1;i>=0;i--){ const l=links[i]; if(l.from===id||l.to===id){ l.el.remove(); links.splice(i,1); } }
+      entry.el.remove(); nodes.delete(id);
+      if(selectedId===id) selectedId=null;
+      delete semanticCache[id]; saveSemanticCache();
+      logAction('Deleted node #'+id);
+    }
+
+    function undoDelete(){
+      if(!lastDeleted) return;
+      createNode(lastDeleted);
+      lastDeleted = null;
+      logAction('Undo last deletion');
+      saveAll();
+    }
+
+  // --- Semantics helpers ---
+  function loadSemanticCache(){ try { return JSON.parse(localStorage.getItem(SEM_CACHE_KEY)||'{}'); } catch { return {}; } }
+  function saveSemanticCache(){ localStorage.setItem(SEM_CACHE_KEY, JSON.stringify(semanticCache)); }
+
+  function markNodeDirty(id){ dirtyNodes.add(id); if(semanticsOn) scheduleRecompute(); }
+  function scheduleRecompute(){ if(recomputeTimer) clearTimeout(recomputeTimer); recomputeTimer=setTimeout(recomputeDirty,400); }
+  function recomputeDirty(){ const ids=Array.from(dirtyNodes); dirtyNodes.clear(); computeEmbeddingsFor(ids); }
+
+  function clearSemanticColors(){ nodes.forEach(n=>{ n.el.style.borderColor='var(--node-border)'; n.el.style.boxShadow=''; }); }
+  function vecToColor(v){
+    const h = Math.round(v[0]*360);
+    const s = Math.round(40 + v[1]*40);
+    const l = Math.round(45 + v[2]*20);
+    // solid color
+    return `hsl(${h} ${s}% ${l}%)`;
+  }
+  function withAlpha(hsl, a=0.25){
+    // hsl(H S% L%) -> hsl(H S% L% / A)
+    return hsl.replace(')', ` / ${a})`).replace(',', ' ');
+  }
+  function applyColorToNode(n,color){
+    n.el.style.borderColor = color;
+    n.el.style.boxShadow   = `0 0 0 3px ${withAlpha(color, 0.25)}`;
+  }
+  function applySemanticColors(){ nodes.forEach((n,id)=>{ const c=semanticCache[id]; if(c) applyColorToNode(n,c.color); }); }
+
+  async function contentHashForNode(node){ const str=(node.titleEl.textContent||'')+'|'+(node.ta.value||''); const buf=new TextEncoder().encode(str); const hash=await crypto.subtle.digest('SHA-256',buf); return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
+
+  // Pinned to avoid surprise breakages and ensure reproducible embeddings/reduction.
+  let embedderPromise = null;
+  async function loadEmbedder(){
+    if (window._embedder) return window._embedder;
+    if (!embedderPromise){
+      embedderPromise = (async () => {
+        try {
+          const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.9.1/dist/transformers.min.js');
+          return window._embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { quantized: true });
+        } catch (err) {
+          logAction('Semantics unavailable (model load failed).');
+          throw err;
+        }
+      })();
+    }
+    return embedderPromise;
+  }
+
+  // Pinned to avoid surprise breakages and ensure reproducible embeddings/reduction.
+  let umapMod = null;
+  async function reduceTo3D(vectors){
+    // Guard: skip UMAP if < 2 vectors
+    if (!vectors || vectors.length < 2){
+      const v = [0.5, 0.5, 0.5];
+      return vectors.map(() => v.slice());
+    }
+    if (!umapMod){
+      try {
+        umapMod = await import('https://esm.sh/umap-js@1.0.2');
+      } catch (err) {
+        logAction('Semantics unavailable (UMAP load failed).');
+        throw err;
+      }
+    }
+    const { UMAP, Random } = umapMod;
+    const umap = new UMAP({ nComponents: 3, random: new Random(42) }); // stable RNG
+    const emb = umap.fit(vectors);
+    const mins = [Infinity,Infinity,Infinity], maxs = [-Infinity,-Infinity,-Infinity];
+    for (const v of emb){ for (let i=0;i<3;i++){ if(v[i]<mins[i]) mins[i]=v[i]; if(v[i]>maxs[i]) maxs[i]=v[i]; } }
+    return emb.map(v => v.map((val,i) => (val - mins[i]) / ((maxs[i]-mins[i]) || 1)));
+  }
+
+  async function computeEmbeddingsFor(ids){
+    if (!ids || !ids.length) return;
+    const t0 = DEV_SEMANTICS_METRICS ? performance.now() : 0;
+
+    const embedder = await loadEmbedder();
+    const need = [];
+    for (const id of ids){
+      const n = nodes.get(id); if(!n) continue;
+      const hash = await contentHashForNode(n);
+      const cached = semanticCache[id];
+      if (cached && cached.hash === hash){
+        applyColorToNode(n, cached.color);
+        continue;
+      }
+      need.push({ id, hash, text: (n.titleEl.textContent||'') + '\n' + (n.ta.value||'') });
+    }
+    if (!need.length){ saveSemanticCache(); return; }
+
+    const res = await embedder(need.map(n=>n.text), { pooling:'mean', normalize:true });
+    const vecs = res.data || res;
+    const t1 = DEV_SEMANTICS_METRICS ? performance.now() : 0;
+
+    const reduced = await reduceTo3D(vecs);
+    const t2 = DEV_SEMANTICS_METRICS ? performance.now() : 0;
+
+    need.forEach((item,i) => {
+      const color = vecToColor(reduced[i]);
+      semanticCache[item.id] = { hash: item.hash, embedding: vecs[i], color };
+      const n = nodes.get(item.id); if (n) applyColorToNode(n, color);
+    });
+    saveSemanticCache();
+
+    if (DEV_SEMANTICS_METRICS){
+      console.log(`[semantics] embed=${(t1-t0).toFixed(1)}ms reduce=${(t2-t1).toFixed(1)}ms total=${(t2-t0).toFixed(1)}ms changed=${need.length}`);
+    }
+  }
 
   // Dragging
   function makeDraggable(el,id){ let startX=0,startY=0,origL=0,origT=0; const onDown=(e)=>{ if(e.button!==undefined&&e.button!==0) return; const t=e.target; if (t.tagName==='TEXTAREA' || t.classList.contains('node-title-input') || t.closest('button') || t.closest('a')) return; el.setPointerCapture?.(e.pointerId); startX=e.clientX; startY=e.clientY; origL=parseFloat(el.style.left)||0; origT=parseFloat(el.style.top)||0; window.addEventListener('pointermove',onMove); window.addEventListener('pointerup',onUp,{once:true}); }; const onMove=(e)=>{ const dx=e.clientX-startX, dy=e.clientY-startY; el.style.left=(origL+dx)+'px'; el.style.top=(origT+dy)+'px'; updateLinksForNode(id); }; const onUp=()=>{ window.removeEventListener('pointermove',onMove); saveAll(); }; el.addEventListener('pointerdown',onDown); setupLongPress(el,(pt)=>{ ctxTargetId=id; showContextMenu(pt.clientX,pt.clientY,true); }); }
@@ -307,6 +486,7 @@
   window.addEventListener('resize', ()=>{ links.forEach(updateLinkPosition); });
 
   bootstrap();
+  if(semanticsOn){ applySemanticColors(); }
 })();
 </script>
 </body>
