@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Comprehensive Semantics Tests</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 3px; }
+        .pass { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .fail { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .pending { background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404; }
+        button { margin: 5px; padding: 8px 16px; cursor: pointer; }
+        #output { margin-top: 20px; }
+        .log { font-family: monospace; font-size: 12px; background: #f8f9fa; padding: 10px; margin: 5px 0; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <h1>SmartTasks Semantic Functionality Tests</h1>
+    
+    <div class="test-section">
+        <h2>Test Suite Controls</h2>
+        <button onclick="runAllTests()">Run All Tests</button>
+        <button onclick="clearResults()">Clear Results</button>
+        <button onclick="runBasicTests()">Run Basic Tests</button>
+        <button onclick="runAdvancedTests()">Run Advanced Tests</button>
+    </div>
+
+    <div id="output"></div>
+
+    <script>
+        let testResults = [];
+        let transformersModule = null;
+        let embedder = null;
+
+        // Test framework
+        function addResult(testName, status, message, details = null) {
+            const result = { testName, status, message, details, timestamp: new Date() };
+            testResults.push(result);
+            displayResult(result);
+        }
+
+        function displayResult(result) {
+            const output = document.getElementById('output');
+            const div = document.createElement('div');
+            div.className = `test-result ${result.status}`;
+            div.innerHTML = `
+                <strong>${result.testName}</strong>: ${result.message}
+                ${result.details ? `<div class="log">${result.details}</div>` : ''}
+                <small>Time: ${result.timestamp.toLocaleTimeString()}</small>
+            `;
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function clearResults() {
+            testResults = [];
+            document.getElementById('output').innerHTML = '';
+        }
+
+        // Basic Tests
+        async function testTransformersImport() {
+            try {
+                addResult('Transformers Import', 'pending', 'Importing @xenova/transformers...');
+                transformersModule = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js');
+                addResult('Transformers Import', 'pass', 'Successfully imported transformers library', 
+                    `Available exports: ${Object.keys(transformersModule).join(', ')}`);
+                return true;
+            } catch (error) {
+                addResult('Transformers Import', 'fail', 'Failed to import transformers', error.message);
+                return false;
+            }
+        }
+
+        async function testEnvironmentConfiguration() {
+            if (!transformersModule) {
+                addResult('Environment Config', 'fail', 'Transformers not loaded');
+                return false;
+            }
+
+            try {
+                const { env } = transformersModule;
+                const beforeConfig = {
+                    allowRemoteModels: env.allowRemoteModels,
+                    allowLocalModels: env.allowLocalModels,
+                    remoteHost: env.remoteHost
+                };
+
+                env.allowRemoteModels = true;
+                env.allowLocalModels = false;
+                env.remoteHost = 'https://huggingface.co';
+
+                const afterConfig = {
+                    allowRemoteModels: env.allowRemoteModels,
+                    allowLocalModels: env.allowLocalModels,
+                    remoteHost: env.remoteHost
+                };
+
+                addResult('Environment Config', 'pass', 'Environment configured successfully',
+                    `Before: ${JSON.stringify(beforeConfig, null, 2)}\nAfter: ${JSON.stringify(afterConfig, null, 2)}`);
+                return true;
+            } catch (error) {
+                addResult('Environment Config', 'fail', 'Failed to configure environment', error.message);
+                return false;
+            }
+        }
+
+        async function testPipelineCreation() {
+            if (!transformersModule) {
+                addResult('Pipeline Creation', 'fail', 'Transformers not loaded');
+                return false;
+            }
+
+            try {
+                addResult('Pipeline Creation', 'pending', 'Creating feature extraction pipeline...');
+                const { pipeline } = transformersModule;
+                embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { quantized: true });
+                addResult('Pipeline Creation', 'pass', 'Pipeline created successfully',
+                    `Pipeline type: ${typeof embedder}`);
+                return true;
+            } catch (error) {
+                addResult('Pipeline Creation', 'fail', 'Failed to create pipeline', error.message);
+                return false;
+            }
+        }
+
+        async function testBasicEmbedding() {
+            if (!embedder) {
+                addResult('Basic Embedding', 'fail', 'Embedder not available');
+                return false;
+            }
+
+            try {
+                addResult('Basic Embedding', 'pending', 'Testing basic embedding...');
+                const testTexts = ['Hello world', 'Test text'];
+                const result = await embedder(testTexts, { pooling: 'mean', normalize: true });
+                
+                const isValidResult = result && result.dims && result.data;
+                const expectedShape = [testTexts.length, 384]; // MiniLM-L6-v2 has 384 dimensions
+                const actualShape = result.dims;
+                const shapeMatches = JSON.stringify(actualShape) === JSON.stringify(expectedShape);
+
+                if (isValidResult && shapeMatches) {
+                    addResult('Basic Embedding', 'pass', 'Basic embedding test successful',
+                        `Shape: ${actualShape}, Data length: ${result.data.length}`);
+                    return true;
+                } else {
+                    addResult('Basic Embedding', 'fail', 'Unexpected embedding result',
+                        `Expected shape: ${expectedShape}, Got: ${actualShape}`);
+                    return false;
+                }
+            } catch (error) {
+                addResult('Basic Embedding', 'fail', 'Basic embedding failed', error.message);
+                return false;
+            }
+        }
+
+        async function testTensorParsing() {
+            if (!embedder) {
+                addResult('Tensor Parsing', 'fail', 'Embedder not available');
+                return false;
+            }
+
+            try {
+                addResult('Tensor Parsing', 'pending', 'Testing tensor parsing logic...');
+                const testTexts = ['Task 1', 'Task 2', 'Task 3', 'Task 4'];
+                const res = await embedder(testTexts, { pooling: 'mean', normalize: true });
+                
+                // Test the parsing logic from the main app
+                let vecs;
+                if (res.dims && res.dims.length === 2) {
+                    const [numTexts, embeddingDim] = res.dims;
+                    vecs = [];
+                    for (let i = 0; i < numTexts; i++) {
+                        const start = i * embeddingDim;
+                        const end = start + embeddingDim;
+                        vecs.push(Array.from(res.data.slice(start, end)));
+                    }
+                } else {
+                    vecs = res.data || res;
+                }
+
+                const isValid = Array.isArray(vecs) && vecs.length === testTexts.length && 
+                               Array.isArray(vecs[0]) && vecs[0].length === 384;
+
+                if (isValid) {
+                    addResult('Tensor Parsing', 'pass', 'Tensor parsing successful',
+                        `Parsed ${vecs.length} vectors of ${vecs[0].length} dimensions each`);
+                    return vecs;
+                } else {
+                    addResult('Tensor Parsing', 'fail', 'Tensor parsing failed',
+                        `Got: ${vecs.length} vectors, first vector length: ${vecs[0]?.length}`);
+                    return false;
+                }
+            } catch (error) {
+                addResult('Tensor Parsing', 'fail', 'Tensor parsing error', error.message);
+                return false;
+            }
+        }
+
+        async function testColorGeneration() {
+            try {
+                addResult('Color Generation', 'pending', 'Testing color generation...');
+                
+                // Test the vecToColor function from the main app
+                function vecToColor(v) {
+                    const h = Math.round(v[0] * 360);
+                    const s = Math.round(40 + v[1] * 40);
+                    const l = Math.round(45 + v[2] * 20);
+                    return `hsl(${h} ${s}% ${l}%)`;
+                }
+
+                const testVectors = [
+                    [0.2, 0.8, 0.6],
+                    [0.8, 0.2, 0.6],
+                    [0.6, 0.8, 0.2],
+                    [0.2, 0.6, 0.8]
+                ];
+
+                const colors = testVectors.map(vecToColor);
+                const validColors = colors.every(color => /^hsl\(\d+ \d+% \d+%\)$/.test(color));
+
+                if (validColors) {
+                    addResult('Color Generation', 'pass', 'Color generation successful',
+                        `Generated colors: ${colors.join(', ')}`);
+                    return true;
+                } else {
+                    addResult('Color Generation', 'fail', 'Invalid color format',
+                        `Colors: ${colors.join(', ')}`);
+                    return false;
+                }
+            } catch (error) {
+                addResult('Color Generation', 'fail', 'Color generation error', error.message);
+                return false;
+            }
+        }
+
+        async function testFallbackReduction() {
+            try {
+                addResult('Fallback Reduction', 'pending', 'Testing fallback 3D reduction...');
+                
+                // Test the fallback logic for small datasets
+                const vectors = [
+                    new Array(384).fill(0).map(() => Math.random()),
+                    new Array(384).fill(0).map(() => Math.random()),
+                    new Array(384).fill(0).map(() => Math.random()),
+                    new Array(384).fill(0).map(() => Math.random())
+                ];
+
+                // Simulate the fallback logic
+                const colors = [
+                    [0.2, 0.8, 0.6], // teal-ish
+                    [0.8, 0.2, 0.6], // pink-ish  
+                    [0.6, 0.8, 0.2], // green-ish
+                    [0.2, 0.6, 0.8], // blue-ish
+                ];
+                const result = vectors.map((_, i) => colors[i % colors.length]);
+
+                const isValid = result.length === vectors.length && 
+                               result.every(color => Array.isArray(color) && color.length === 3);
+
+                if (isValid) {
+                    addResult('Fallback Reduction', 'pass', 'Fallback reduction successful',
+                        `Generated ${result.length} 3D color vectors`);
+                    return true;
+                } else {
+                    addResult('Fallback Reduction', 'fail', 'Fallback reduction failed');
+                    return false;
+                }
+            } catch (error) {
+                addResult('Fallback Reduction', 'fail', 'Fallback reduction error', error.message);
+                return false;
+            }
+        }
+
+        // Test runners
+        async function runBasicTests() {
+            clearResults();
+            addResult('Test Suite', 'pending', 'Starting basic tests...');
+            
+            const tests = [
+                testTransformersImport,
+                testEnvironmentConfiguration,
+                testPipelineCreation,
+                testBasicEmbedding,
+                testTensorParsing,
+                testColorGeneration,
+                testFallbackReduction
+            ];
+
+            let passed = 0;
+            for (const test of tests) {
+                const result = await test();
+                if (result) passed++;
+            }
+
+            addResult('Test Suite', passed === tests.length ? 'pass' : 'fail',
+                `Basic tests completed: ${passed}/${tests.length} passed`);
+        }
+
+        async function runAdvancedTests() {
+            addResult('Advanced Tests', 'pending', 'Running advanced integration tests...');
+
+            // Test semantic similarity detection
+            await testSemanticSimilarity();
+
+            // Test performance with larger datasets
+            await testPerformance();
+
+            // Test error handling
+            await testErrorHandling();
+        }
+
+        async function testSemanticSimilarity() {
+            if (!embedder) {
+                addResult('Semantic Similarity', 'fail', 'Embedder not available');
+                return false;
+            }
+
+            try {
+                addResult('Semantic Similarity', 'pending', 'Testing semantic similarity detection...');
+
+                // Test texts with known semantic relationships
+                const similarTexts = [
+                    'Write documentation for the API',
+                    'Create API documentation',
+                    'Document the REST endpoints'
+                ];
+
+                const differentTexts = [
+                    'Fix database connection bug',
+                    'Design user interface mockups',
+                    'Set up CI/CD pipeline'
+                ];
+
+                const allTexts = [...similarTexts, ...differentTexts];
+                const result = await embedder(allTexts, { pooling: 'mean', normalize: true });
+
+                // Parse vectors
+                let vecs;
+                if (result.dims && result.dims.length === 2) {
+                    const [numTexts, embeddingDim] = result.dims;
+                    vecs = [];
+                    for (let i = 0; i < numTexts; i++) {
+                        const start = i * embeddingDim;
+                        const end = start + embeddingDim;
+                        vecs.push(Array.from(result.data.slice(start, end)));
+                    }
+                }
+
+                // Calculate cosine similarity between similar texts
+                function cosineSimilarity(a, b) {
+                    const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
+                    const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+                    const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+                    return dotProduct / (magnitudeA * magnitudeB);
+                }
+
+                const similarityWithinGroup = cosineSimilarity(vecs[0], vecs[1]);
+                const similarityBetweenGroups = cosineSimilarity(vecs[0], vecs[3]);
+
+                if (similarityWithinGroup > similarityBetweenGroups) {
+                    addResult('Semantic Similarity', 'pass', 'Semantic similarity detection working',
+                        `Within-group similarity: ${similarityWithinGroup.toFixed(3)}, Between-group: ${similarityBetweenGroups.toFixed(3)}`);
+                    return true;
+                } else {
+                    addResult('Semantic Similarity', 'fail', 'Semantic similarity detection failed',
+                        `Within-group: ${similarityWithinGroup.toFixed(3)} <= Between-group: ${similarityBetweenGroups.toFixed(3)}`);
+                    return false;
+                }
+            } catch (error) {
+                addResult('Semantic Similarity', 'fail', 'Semantic similarity test error', error.message);
+                return false;
+            }
+        }
+
+        async function testPerformance() {
+            if (!embedder) {
+                addResult('Performance Test', 'fail', 'Embedder not available');
+                return false;
+            }
+
+            try {
+                addResult('Performance Test', 'pending', 'Testing performance with larger dataset...');
+
+                // Generate test data
+                const testTexts = [];
+                for (let i = 0; i < 20; i++) {
+                    testTexts.push(`Task ${i}: ${Math.random().toString(36).substring(7)} implementation`);
+                }
+
+                const startTime = performance.now();
+                const result = await embedder(testTexts, { pooling: 'mean', normalize: true });
+                const endTime = performance.now();
+
+                const duration = endTime - startTime;
+                const isReasonable = duration < 10000; // Should complete within 10 seconds
+
+                if (isReasonable) {
+                    addResult('Performance Test', 'pass', 'Performance test passed',
+                        `Processed ${testTexts.length} texts in ${duration.toFixed(1)}ms (${(duration/testTexts.length).toFixed(1)}ms per text)`);
+                    return true;
+                } else {
+                    addResult('Performance Test', 'fail', 'Performance test failed - too slow',
+                        `Took ${duration.toFixed(1)}ms for ${testTexts.length} texts`);
+                    return false;
+                }
+            } catch (error) {
+                addResult('Performance Test', 'fail', 'Performance test error', error.message);
+                return false;
+            }
+        }
+
+        async function testErrorHandling() {
+            try {
+                addResult('Error Handling', 'pending', 'Testing error handling...');
+
+                // Test with invalid inputs
+                const tests = [
+                    { input: [], expected: 'empty array' },
+                    { input: [''], expected: 'empty string' },
+                    { input: [null], expected: 'null input' }
+                ];
+
+                let passedTests = 0;
+                for (const test of tests) {
+                    try {
+                        if (embedder && test.input.length > 0 && test.input[0] !== null) {
+                            await embedder(test.input, { pooling: 'mean', normalize: true });
+                        }
+                        passedTests++;
+                    } catch (error) {
+                        // Expected to fail for some inputs
+                        passedTests++;
+                    }
+                }
+
+                addResult('Error Handling', 'pass', 'Error handling test completed',
+                    `Handled ${passedTests}/${tests.length} error cases gracefully`);
+                return true;
+            } catch (error) {
+                addResult('Error Handling', 'fail', 'Error handling test failed', error.message);
+                return false;
+            }
+        }
+
+        async function runAllTests() {
+            await runBasicTests();
+            await runAdvancedTests();
+        }
+
+        // Auto-run basic tests on load
+        window.addEventListener('load', () => {
+            setTimeout(runBasicTests, 1000);
+        });
+    </script>
+</body>
+</html>

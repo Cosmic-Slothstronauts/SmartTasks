@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Semantics</title>
+</head>
+<body>
+    <h1>Testing Transformers.js Semantics</h1>
+    <button id="testBtn">Test Embedder</button>
+    <div id="output"></div>
+
+    <script>
+        document.getElementById('testBtn').addEventListener('click', async () => {
+            const output = document.getElementById('output');
+            output.innerHTML = 'Testing...<br>';
+            
+            try {
+                console.log('Starting test...');
+                output.innerHTML += 'Importing transformers...<br>';
+                
+                const { pipeline, env } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js');
+                output.innerHTML += 'Transformers imported successfully<br>';
+                
+                console.log('Environment before config:', env);
+                env.allowRemoteModels = true;
+                env.allowLocalModels = false;
+                output.innerHTML += 'Environment configured<br>';
+                console.log('Environment after config:', env);
+                
+                output.innerHTML += 'Creating pipeline...<br>';
+                const embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { quantized: true });
+                output.innerHTML += 'Pipeline created successfully<br>';
+                
+                output.innerHTML += 'Testing embedder with sample text...<br>';
+                const result = await embedder(['Hello world', 'Test text'], { pooling: 'mean', normalize: true });
+                output.innerHTML += `Embedder test successful! Result shape: ${result.data ? result.data.length : result.length}<br>`;
+                console.log('Embedder result:', result);
+                
+            } catch (error) {
+                console.error('Test failed:', error);
+                output.innerHTML += `Test failed: ${error.message}<br>`;
+            }
+        });
+    </script>
+</body>
+</html>

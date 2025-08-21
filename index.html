@@ -200,9 +200,17 @@
 
   // Semantic controls
   recomputeBtn.addEventListener('click', async ()=> {
+    console.log('Recompute button clicked, semanticsOn:', semanticsOn);
     if (!semanticsOn) return;
-    try { await computeEmbeddingsFor([...nodes.keys()]); }
-    catch { /* already logged; leave UI usable */ }
+    console.log('Starting recompute for nodes:', [...nodes.keys()]);
+    try {
+      await computeEmbeddingsFor([...nodes.keys()]);
+      console.log('Recompute completed successfully');
+    }
+    catch (err) {
+      console.error('Recompute failed:', err);
+      logAction('Semantics recompute failed: ' + err.message);
+    }
   });
 
   semanticBtn.addEventListener('click', async () => {
@@ -254,7 +262,15 @@
   function setHint(t){ modeHint.textContent=t; }
 
   // Log
-  function logAction(t){ const li=document.createElement('li'); li.textContent='['+new Date().toLocaleTimeString()+'] '+t; logList.appendChild(li); logList.scrollTop=logList.scrollHeight; }
+  function logAction(t){
+    const li=document.createElement('li');
+    li.textContent='['+new Date().toLocaleTimeString()+'] '+t;
+    logList.appendChild(li);
+    // Auto-scroll to bottom
+    setTimeout(() => {
+      logList.scrollTop = logList.scrollHeight;
+    }, 0);
+  }
 
   // Markdown
   function escapeHTML(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -380,76 +396,205 @@
   // Pinned to avoid surprise breakages and ensure reproducible embeddings/reduction.
   let embedderPromise = null;
   async function loadEmbedder(){
-    if (window._embedder) return window._embedder;
+    console.log('loadEmbedder called, checking cache...');
+    if (window._embedder) {
+      console.log('Using cached embedder');
+      return window._embedder;
+    }
     if (!embedderPromise){
+      console.log('Creating new embedder promise...');
       embedderPromise = (async () => {
         try {
-          const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.9.1/dist/transformers.min.js');
-          return window._embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { quantized: true });
+          console.log('Importing transformers library...');
+          const transformersModule = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js');
+          const { pipeline, env } = transformersModule;
+          console.log('Transformers imported, configuring environment...');
+          console.log('Environment before config:', {
+            allowRemoteModels: env.allowRemoteModels,
+            allowLocalModels: env.allowLocalModels,
+            remoteHost: env.remoteHost,
+            localModelPath: env.localModelPath
+          });
+
+          // Configure to allow remote models from Hugging Face Hub
+          env.allowRemoteModels = true;
+          env.allowLocalModels = false;
+          env.remoteHost = 'https://huggingface.co';
+
+          console.log('Environment after config:', {
+            allowRemoteModels: env.allowRemoteModels,
+            allowLocalModels: env.allowLocalModels,
+            remoteHost: env.remoteHost,
+            localModelPath: env.localModelPath
+          });
+
+          console.log('Environment configured, creating pipeline...');
+          const embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { quantized: true });
+          console.log('Pipeline created successfully');
+          return window._embedder = embedder;
         } catch (err) {
-          logAction('Semantics unavailable (model load failed).');
+          console.error('Embedder loading failed:', err);
+          logAction('Semantics unavailable (model load failed): ' + err.message);
           throw err;
         }
       })();
     }
+    console.log('Waiting for embedder promise...');
     return embedderPromise;
   }
 
   // Pinned to avoid surprise breakages and ensure reproducible embeddings/reduction.
   let umapMod = null;
   async function reduceTo3D(vectors){
+    console.log('reduceTo3D called with vectors:', vectors.length, 'vectors of dimension', vectors[0]?.length);
+
     // Guard: skip UMAP if < 2 vectors
     if (!vectors || vectors.length < 2){
+      console.log('Less than 2 vectors, using default color');
       const v = [0.5, 0.5, 0.5];
       return vectors.map(() => v.slice());
     }
+
+    // For small numbers of vectors, use a simple fallback instead of UMAP
+    if (vectors.length <= 4) {
+      console.log('Using simple fallback for small number of vectors');
+      const colors = [
+        [0.2, 0.8, 0.6], // teal-ish
+        [0.8, 0.2, 0.6], // pink-ish
+        [0.6, 0.8, 0.2], // green-ish
+        [0.2, 0.6, 0.8], // blue-ish
+      ];
+      return vectors.map((_, i) => colors[i % colors.length]);
+    }
+
     if (!umapMod){
+      console.log('Loading UMAP module...');
       try {
         umapMod = await import('https://esm.sh/umap-js@1.0.2');
+        console.log('UMAP module loaded successfully', umapMod);
       } catch (err) {
+        console.error('UMAP load failed:', err);
         logAction('Semantics unavailable (UMAP load failed).');
-        throw err;
+        // Fallback to simple coloring
+        console.log('Using fallback coloring due to UMAP failure');
+        const colors = vectors.map((_, i) => [
+          (i * 0.3) % 1,
+          0.7,
+          0.5
+        ]);
+        return colors;
       }
     }
-    const { UMAP, Random } = umapMod;
-    const umap = new UMAP({ nComponents: 3, random: new Random(42) }); // stable RNG
-    const emb = umap.fit(vectors);
-    const mins = [Infinity,Infinity,Infinity], maxs = [-Infinity,-Infinity,-Infinity];
-    for (const v of emb){ for (let i=0;i<3;i++){ if(v[i]<mins[i]) mins[i]=v[i]; if(v[i]>maxs[i]) maxs[i]=v[i]; } }
-    return emb.map(v => v.map((val,i) => (val - mins[i]) / ((maxs[i]-mins[i]) || 1)));
+
+    try {
+      console.log('Creating UMAP instance...');
+      const { UMAP, Random } = umapMod;
+      console.log('UMAP constructor:', UMAP);
+      const umap = new UMAP({ nComponents: 3, random: new Random(42) }); // stable RNG
+      console.log('UMAP instance created, fitting...');
+      const emb = umap.fit(vectors);
+      console.log('UMAP fit complete, result:', emb);
+      const mins = [Infinity,Infinity,Infinity], maxs = [-Infinity,-Infinity,-Infinity];
+      for (const v of emb){ for (let i=0;i<3;i++){ if(v[i]<mins[i]) mins[i]=v[i]; if(v[i]>maxs[i]) maxs[i]=v[i]; } }
+      const normalized = emb.map(v => v.map((val,i) => (val - mins[i]) / ((maxs[i]-mins[i]) || 1)));
+      console.log('3D reduction normalized:', normalized);
+      return normalized;
+    } catch (err) {
+      console.error('UMAP processing failed:', err);
+      logAction('UMAP processing failed, using fallback coloring.');
+      // Fallback to simple coloring
+      const colors = vectors.map((_, i) => [
+        (i * 0.3) % 1,
+        0.7,
+        0.5
+      ]);
+      return colors;
+    }
   }
 
   async function computeEmbeddingsFor(ids){
-    if (!ids || !ids.length) return;
+    console.log('computeEmbeddingsFor called with ids:', ids);
+    if (!ids || !ids.length) {
+      console.log('No ids provided, returning early');
+      return;
+    }
     const t0 = DEV_SEMANTICS_METRICS ? performance.now() : 0;
 
+    console.log('Loading embedder...');
     const embedder = await loadEmbedder();
+    console.log('Embedder loaded:', embedder);
     const need = [];
+
+    console.log('Processing nodes to find what needs embedding...');
     for (const id of ids){
-      const n = nodes.get(id); if(!n) continue;
+      const n = nodes.get(id);
+      if(!n) {
+        console.log(`Node ${id} not found, skipping`);
+        continue;
+      }
       const hash = await contentHashForNode(n);
       const cached = semanticCache[id];
       if (cached && cached.hash === hash){
+        console.log(`Node ${id} already cached, applying existing color`);
         applyColorToNode(n, cached.color);
         continue;
       }
-      need.push({ id, hash, text: (n.titleEl.textContent||'') + '\n' + (n.ta.value||'') });
+      const text = (n.titleEl.textContent||'') + '\n' + (n.ta.value||'');
+      console.log(`Node ${id} needs embedding, text: "${text.trim()}"`);
+      need.push({ id, hash, text });
     }
-    if (!need.length){ saveSemanticCache(); return; }
 
-    const res = await embedder(need.map(n=>n.text), { pooling:'mean', normalize:true });
-    const vecs = res.data || res;
+    if (!need.length){
+      console.log('No nodes need embedding, all cached');
+      saveSemanticCache();
+      return;
+    }
+
+    console.log(`Computing embeddings for ${need.length} nodes...`);
+    const texts = need.map(n=>n.text);
+    console.log('Texts to embed:', texts);
+
+    const res = await embedder(texts, { pooling:'mean', normalize:true });
+    console.log('Embedder result:', res);
+    console.log('Embedder result dims:', res.dims);
+    console.log('Embedder result data length:', res.data.length);
+
+    // Convert tensor to 2D array
+    let vecs;
+    if (res.dims && res.dims.length === 2) {
+      // res.dims = [num_texts, embedding_dim]
+      const [numTexts, embeddingDim] = res.dims;
+      vecs = [];
+      for (let i = 0; i < numTexts; i++) {
+        const start = i * embeddingDim;
+        const end = start + embeddingDim;
+        vecs.push(Array.from(res.data.slice(start, end)));
+      }
+    } else {
+      // Fallback to original logic
+      vecs = res.data || res;
+    }
+    console.log('Vectors shape:', vecs.length, 'x', vecs[0]?.length);
     const t1 = DEV_SEMANTICS_METRICS ? performance.now() : 0;
 
+    console.log('Reducing to 3D...');
     const reduced = await reduceTo3D(vecs);
+    console.log('3D reduction complete:', reduced);
     const t2 = DEV_SEMANTICS_METRICS ? performance.now() : 0;
 
+    console.log('Applying colors to nodes...');
     need.forEach((item,i) => {
       const color = vecToColor(reduced[i]);
+      console.log(`Node ${item.id} gets color: ${color}`);
       semanticCache[item.id] = { hash: item.hash, embedding: vecs[i], color };
-      const n = nodes.get(item.id); if (n) applyColorToNode(n, color);
+      const n = nodes.get(item.id);
+      if (n) {
+        applyColorToNode(n, color);
+        console.log(`Applied color to node ${item.id}`);
+      }
     });
     saveSemanticCache();
+    console.log('Semantic coloring complete!');
 
     if (DEV_SEMANTICS_METRICS){
       console.log(`[semantics] embed=${(t1-t0).toFixed(1)}ms reduce=${(t2-t1).toFixed(1)}ms total=${(t2-t0).toFixed(1)}ms changed=${need.length}`);
