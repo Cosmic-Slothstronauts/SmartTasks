@@ -90,6 +90,7 @@
     <div class="right">
       <span class="hint" id="modeHint">Tip: L to link, U to unlink. Long‑press for node menu.</span>
       <button id="viewModeBtn" class="iconbtn" title="Toggle Edit/Preview">👁 Preview</button>
+      <button id="toggleAllBtn" class="iconbtn" title="Toggle all descriptions">📋 Collapse All</button>
       <button id="recomputeBtn" class="iconbtn" title="Recompute semantic colours" disabled>↻ Recompute</button>
       <button id="semanticBtn" class="iconbtn" title="Toggle semantic colouring">🎨 Semantics</button>
       <button id="themeBtn" class="iconbtn" title="Toggle dark/light">🌙</button>
@@ -138,9 +139,11 @@
   const STORAGE_KEY = 'taskheat.v5restore';
   const THEME_KEY = 'taskheat.theme';
   const VIEW_KEY = 'taskheat.view';
+  const TOGGLE_ALL_KEY = 'taskheat.toggleall';
 
   const menuBtn = document.getElementById('menuBtn');
   const viewModeBtn = document.getElementById('viewModeBtn');
+  const toggleAllBtn = document.getElementById('toggleAllBtn');
   const themeBtn = document.getElementById('themeBtn');
   const semanticBtn = document.getElementById('semanticBtn');
   const recomputeBtn = document.getElementById('recomputeBtn');
@@ -197,6 +200,46 @@
     applyViewModeToAll();
   });
   function updateViewButton(){ viewModeBtn.textContent = viewMode === 'edit' ? '👁 Preview' : '✍️ Edit'; }
+
+  // Global description toggle
+  let allDescriptionsOpen = localStorage.getItem(TOGGLE_ALL_KEY) === 'true';
+  updateToggleAllButton();
+  toggleAllBtn.addEventListener('click', () => {
+    allDescriptionsOpen = !allDescriptionsOpen;
+    localStorage.setItem(TOGGLE_ALL_KEY, allDescriptionsOpen.toString());
+    updateToggleAllButton();
+    toggleAllDescriptions();
+  });
+  function updateToggleAllButton(){ 
+    toggleAllBtn.textContent = allDescriptionsOpen ? '📋 Collapse All' : '📋 Expand All'; 
+  }
+  function toggleAllDescriptions(){
+    nodes.forEach((node) => {
+      const { descWrap, toggleEl } = node;
+      if (allDescriptionsOpen) {
+        descWrap.classList.add('open');
+        toggleEl.textContent = '▾';
+      } else {
+        descWrap.classList.remove('open');
+        toggleEl.textContent = '▸';
+      }
+    });
+    saveAll();
+  }
+  function updateGlobalToggleState(){
+    const openCount = Array.from(nodes.values()).filter(node => node.descWrap.classList.contains('open')).length;
+    const totalCount = nodes.size;
+    
+    if (openCount === totalCount && totalCount > 0) {
+      allDescriptionsOpen = true;
+    } else if (openCount === 0) {
+      allDescriptionsOpen = false;
+    }
+    // If partially open, don't change the global state
+    
+    localStorage.setItem(TOGGLE_ALL_KEY, allDescriptionsOpen.toString());
+    updateToggleAllButton();
+  }
 
   // Semantic controls
   recomputeBtn.addEventListener('click', async ()=> {
@@ -315,7 +358,15 @@
     el.addEventListener('click',(e)=>{ if(e.target===toggle || e.target===ta) return; if(mode==='idle') return; const thisId=useId; if(firstPickId==null){ firstPickId=thisId; el.classList.add('selected'); setHint((mode==='link'?'Link':'Unlink')+': pick second node.'); } else if(firstPickId!==thisId){ const firstEl=nodes.get(firstPickId)?.el; firstEl?.classList.remove('selected'); if(mode==='link') addLink(firstPickId,thisId); else removeLinkBetween(firstPickId,thisId); firstPickId=null; setMode('idle'); } });
 
     // Toggle description
-    toggle.addEventListener('click',(e)=>{ e.stopPropagation(); const open=!descWrap.classList.contains('open'); descWrap.classList.toggle('open'); toggle.textContent=open?'▾':'▸'; if(open) ta.focus(); saveAll(); });
+    toggle.addEventListener('click',(e)=>{ 
+      e.stopPropagation(); 
+      const open=!descWrap.classList.contains('open'); 
+      descWrap.classList.toggle('open'); 
+      toggle.textContent=open?'▾':'▸'; 
+      if(open) ta.focus(); 
+      updateGlobalToggleState();
+      saveAll(); 
+    });
 
     // Inline rename on double click
     titleEl.addEventListener('dblclick',(e)=>{ e.stopPropagation(); startInlineTitleRename(useId); });
@@ -626,7 +677,30 @@
   function loadAll(){ try { return JSON.parse(localStorage.getItem(STORAGE_KEY)||''); } catch { return null; } }
 
   // Bootstrap
-  function bootstrap(){ const s=loadAll(); if(s && s.nodes){ const ids=Object.keys(s.nodes).map(Number).sort((a,b)=>a-b); ids.forEach(id=>{ const n=s.nodes[id]; createNode({id:n.id, title:n.title, x:n.x, y:n.y, desc:n.desc, descOpen:n.descOpen}); }); nextId = Math.max(s.nextId||1, Math.max(0,...ids)+1); if (Array.isArray(s.links)) s.links.forEach(([f,t])=>addLink(f,t)); applyViewModeToAll(); logAction('Restored from localStorage'); } else { const a=createNode({title:'Plan feature', x:60, y:60, desc:'- Outline tasks\n- Define links'}); const b=createNode({title:'Implement MVP', x:280, y:160, desc:'Core features:\n- Drag\n- Links\n- Markdown'}); const c=createNode({title:'Test basic flow', x:520, y:80, desc:'Smoke test interactions'}); addLink(a,b); addLink(b,c); applyViewModeToAll(); saveAll(); } }
+  function bootstrap(){ 
+    const s=loadAll(); 
+    if(s && s.nodes){ 
+      const ids=Object.keys(s.nodes).map(Number).sort((a,b)=>a-b); 
+      ids.forEach(id=>{ 
+        const n=s.nodes[id]; 
+        createNode({id:n.id, title:n.title, x:n.x, y:n.y, desc:n.desc, descOpen:n.descOpen}); 
+      }); 
+      nextId = Math.max(s.nextId||1, Math.max(0,...ids)+1); 
+      if (Array.isArray(s.links)) s.links.forEach(([f,t])=>addLink(f,t)); 
+      applyViewModeToAll(); 
+      updateGlobalToggleState();
+      logAction('Restored from localStorage'); 
+    } else { 
+      const a=createNode({title:'Plan feature', x:60, y:60, desc:'- Outline tasks\n- Define links'}); 
+      const b=createNode({title:'Implement MVP', x:280, y:160, desc:'Core features:\n- Drag\n- Links\n- Markdown'}); 
+      const c=createNode({title:'Test basic flow', x:520, y:80, desc:'Smoke test interactions'}); 
+      addLink(a,b); 
+      addLink(b,c); 
+      applyViewModeToAll(); 
+      updateGlobalToggleState();
+      saveAll(); 
+    } 
+  }
 
   window.addEventListener('resize', ()=>{ links.forEach(updateLinkPosition); });
 
