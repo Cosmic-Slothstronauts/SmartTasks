@@ -90,6 +90,7 @@
     <div class="right">
       <span class="hint" id="modeHint">Tip: L to link, U to unlink. Long‑press for node menu.</span>
       <button id="viewModeBtn" class="iconbtn" title="Toggle Edit/Preview">👁 Preview</button>
+      <button id="toggleAllDescBtn" class="iconbtn" title="Toggle all descriptions">▸ All</button>
       <button id="recomputeBtn" class="iconbtn" title="Recompute semantic colours" disabled>↻ Recompute</button>
       <button id="semanticBtn" class="iconbtn" title="Toggle semantic colouring">🎨 Semantics</button>
       <button id="themeBtn" class="iconbtn" title="Toggle dark/light">🌙</button>
@@ -141,6 +142,7 @@
 
   const menuBtn = document.getElementById('menuBtn');
   const viewModeBtn = document.getElementById('viewModeBtn');
+  const toggleAllDescBtn = document.getElementById('toggleAllDescBtn');
   const themeBtn = document.getElementById('themeBtn');
   const semanticBtn = document.getElementById('semanticBtn');
   const recomputeBtn = document.getElementById('recomputeBtn');
@@ -197,6 +199,21 @@
     applyViewModeToAll();
   });
   function updateViewButton(){ viewModeBtn.textContent = viewMode === 'edit' ? '👁 Preview' : '✍️ Edit'; }
+
+  // Toggle all descriptions
+  function updateToggleAllDescBtn(){
+    const allOpen = [...nodes.values()].every(n => n.descWrap.classList.contains('open'));
+    toggleAllDescBtn.textContent = allOpen ? '▾ All' : '▸ All';
+  }
+  toggleAllDescBtn.addEventListener('click', () => {
+    const anyClosed = [...nodes.values()].some(n => !n.descWrap.classList.contains('open'));
+    nodes.forEach(n => {
+      n.descWrap.classList.toggle('open', anyClosed);
+      n.toggleEl.textContent = anyClosed ? '▾' : '▸';
+    });
+    updateToggleAllDescBtn();
+    saveAll();
+  });
 
   // Semantic controls
   recomputeBtn.addEventListener('click', async ()=> {
@@ -315,7 +332,7 @@
     el.addEventListener('click',(e)=>{ if(e.target===toggle || e.target===ta) return; if(mode==='idle') return; const thisId=useId; if(firstPickId==null){ firstPickId=thisId; el.classList.add('selected'); setHint((mode==='link'?'Link':'Unlink')+': pick second node.'); } else if(firstPickId!==thisId){ const firstEl=nodes.get(firstPickId)?.el; firstEl?.classList.remove('selected'); if(mode==='link') addLink(firstPickId,thisId); else removeLinkBetween(firstPickId,thisId); firstPickId=null; setMode('idle'); } });
 
     // Toggle description
-    toggle.addEventListener('click',(e)=>{ e.stopPropagation(); const open=!descWrap.classList.contains('open'); descWrap.classList.toggle('open'); toggle.textContent=open?'▾':'▸'; if(open) ta.focus(); saveAll(); });
+    toggle.addEventListener('click',(e)=>{ e.stopPropagation(); const open=!descWrap.classList.contains('open'); descWrap.classList.toggle('open'); toggle.textContent=open?'▾':'▸'; if(open) ta.focus(); saveAll(); updateToggleAllDescBtn(); });
 
     // Inline rename on double click
     titleEl.addEventListener('dblclick',(e)=>{ e.stopPropagation(); startInlineTitleRename(useId); });
@@ -334,6 +351,7 @@
 
     logAction('Created node #'+useId);
     if(semanticsOn){ markNodeDirty(useId); }
+    updateToggleAllDescBtn();
     return useId;
   }
 
@@ -351,7 +369,7 @@
         descOpen: entry.descWrap.classList.contains('open')
       };
       for(let i=links.length-1;i>=0;i--){ const l=links[i]; if(l.from===id||l.to===id){ l.el.remove(); links.splice(i,1); } }
-      entry.el.remove(); nodes.delete(id);
+      entry.el.remove(); nodes.delete(id); updateToggleAllDescBtn();
       if(selectedId===id) selectedId=null;
       delete semanticCache[id]; saveSemanticCache();
       logAction('Deleted node #'+id);
@@ -631,6 +649,7 @@
   window.addEventListener('resize', ()=>{ links.forEach(updateLinkPosition); });
 
   bootstrap();
+  updateToggleAllDescBtn();
   if(semanticsOn){ applySemanticColors(); }
 })();
 </script>
