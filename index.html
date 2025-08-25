@@ -126,6 +126,7 @@
   <div class="ctx-section"></div>
   <button class="ctx-item" data-action="startLink">🔗 Start link from this</button>
   <button class="ctx-item" data-action="startUnlink">🧹 Start unlink from this</button>
+  <button class="ctx-item" data-action="seedCanvas">🌱 Seed canvas</button>
   <div class="ctx-section"></div>
   <button class="ctx-item" data-action="updateDesc">📝 Update description</button>
   <button class="ctx-item" data-action="rename">✏️ Rename title</button>
@@ -610,7 +611,7 @@
   window.addEventListener('click', (e)=>{ if (!ctxMenu.contains(e.target)) hideContextMenu(); });
   canvasWrap.addEventListener('contextmenu',(e)=>{ if(e.target===canvasWrap||e.target===linkLayer){ e.preventDefault(); ctxTargetId=null; showContextMenu(e.clientX,e.clientY,false); } });
 
-  ctxMenu.addEventListener('click',(e)=>{ const btn=e.target.closest('[data-action]'); if(!btn) return; e.stopPropagation(); const act=btn.dataset.action; hideContextMenu(); if(act==='addHere'){ const name=prompt('Task title'); if(name!==null){ createNode({title:(name||'').trim(), x:lastContextPos.x, y:lastContextPos.y}); saveAll(); } return; } if(ctxTargetId!=null){ const n=nodes.get(ctxTargetId); if(!n) return; if(act==='startLink'){ setMode('link'); firstPickId=ctxTargetId; n.el.classList.add('selected'); setHint('Link: pick a target node.'); } else if(act==='startUnlink'){ setMode('unlink'); firstPickId=ctxTargetId; n.el.classList.add('selected'); setHint('Unlink: pick the other node.'); } else if(act==='rename'){ startInlineTitleRename(ctxTargetId); } else if(act==='updateDesc'){ if(!n.descWrap.classList.contains('open')){ n.descWrap.classList.add('open'); n.toggleEl.textContent='▾'; } n.ta.focus(); } else if(act==='delete'){ deleteNode(ctxTargetId); saveAll(); } } });
+  ctxMenu.addEventListener('click',(e)=>{ const btn=e.target.closest('[data-action]'); if(!btn) return; e.stopPropagation(); const act=btn.dataset.action; hideContextMenu(); if(act==='addHere'){ const name=prompt('Task title'); if(name!==null){ createNode({title:(name||'').trim(), x:lastContextPos.x, y:lastContextPos.y}); saveAll(); } return; } if(act==='seedCanvas'){ seedCanvas(); return; } if(ctxTargetId!=null){ const n=nodes.get(ctxTargetId); if(!n) return; if(act==='startLink'){ setMode('link'); firstPickId=ctxTargetId; n.el.classList.add('selected'); setHint('Link: pick a target node.'); } else if(act==='startUnlink'){ setMode('unlink'); firstPickId=ctxTargetId; n.el.classList.add('selected'); setHint('Unlink: pick the other node.'); } else if(act==='rename'){ startInlineTitleRename(ctxTargetId); } else if(act==='updateDesc'){ if(!n.descWrap.classList.contains('open')){ n.descWrap.classList.add('open'); n.toggleEl.textContent='▾'; } n.ta.focus(); } else if(act==='delete'){ deleteNode(ctxTargetId); saveAll(); } } });
 
   // Long‑press
   const LONG_PRESS_MS=500, MOVE_CANCEL_PX=8; function setupLongPress(target,onFire){ let timer=null, sx=0, sy=0; const clear=()=>{ if(timer){ clearTimeout(timer); timer=null; } }; const onDown=(e)=>{ if(e.button!==undefined&&e.button!==0) return; sx=e.clientX; sy=e.clientY; clear(); timer=setTimeout(()=>onFire({clientX:e.clientX, clientY:e.clientY}), LONG_PRESS_MS); }; const onMove=(e)=>{ if(!timer) return; if(Math.abs(e.clientX-sx)>MOVE_CANCEL_PX || Math.abs(e.clientY-sy)>MOVE_CANCEL_PX) clear(); }; const onUp=()=>clear(); target.addEventListener('pointerdown',onDown); target.addEventListener('pointermove',onMove); target.addEventListener('pointerup',onUp); target.addEventListener('pointercancel',onUp); target.addEventListener('pointerleave',onUp); }
@@ -624,6 +625,20 @@
   // Persistence
   function saveAll(){ const state={ nextId, nodes:{}, links: links.map(l=>[l.from,l.to]) }; nodes.forEach((n,id)=>{ state.nodes[id]={ id, title: n.titleEl.textContent, desc: n.ta.value, x: parseFloat(n.el.style.left)||0, y: parseFloat(n.el.style.top)||0, descOpen: n.descWrap.classList.contains('open') }; }); localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
   function loadAll(){ try { return JSON.parse(localStorage.getItem(STORAGE_KEY)||''); } catch { return null; } }
+
+  // Seed example nodes for testing without touching saved state
+  function seedCanvas(){
+    const prev = localStorage.getItem(STORAGE_KEY);
+    const semPrev = localStorage.getItem(SEM_CACHE_KEY);
+    const a = createNode({title:'Example A', x:80, y:80});
+    const b = createNode({title:'Example B', x:280, y:160});
+    const c = createNode({title:'Example C', x:480, y:80});
+    addLink(a,b);
+    addLink(b,c);
+    if(prev===null) localStorage.removeItem(STORAGE_KEY); else localStorage.setItem(STORAGE_KEY, prev);
+    if(semPrev===null) localStorage.removeItem(SEM_CACHE_KEY); else localStorage.setItem(SEM_CACHE_KEY, semPrev);
+  }
+  window.seedCanvas = seedCanvas;
 
   // Bootstrap
   function bootstrap(){ const s=loadAll(); if(s && s.nodes){ const ids=Object.keys(s.nodes).map(Number).sort((a,b)=>a-b); ids.forEach(id=>{ const n=s.nodes[id]; createNode({id:n.id, title:n.title, x:n.x, y:n.y, desc:n.desc, descOpen:n.descOpen}); }); nextId = Math.max(s.nextId||1, Math.max(0,...ids)+1); if (Array.isArray(s.links)) s.links.forEach(([f,t])=>addLink(f,t)); applyViewModeToAll(); logAction('Restored from localStorage'); } else { const a=createNode({title:'Plan feature', x:60, y:60, desc:'- Outline tasks\n- Define links'}); const b=createNode({title:'Implement MVP', x:280, y:160, desc:'Core features:\n- Drag\n- Links\n- Markdown'}); const c=createNode({title:'Test basic flow', x:520, y:80, desc:'Smoke test interactions'}); addLink(a,b); addLink(b,c); applyViewModeToAll(); saveAll(); } }
