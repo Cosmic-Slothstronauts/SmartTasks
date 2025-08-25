@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "test": "node verify.js"
+    "test": "node verify.js && node test-seed.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
   }
 }
