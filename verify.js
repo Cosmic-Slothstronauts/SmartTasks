@@ -38,6 +38,9 @@ const checks = [
   { id: "markdown", label: "Markdown renderer reachable", fn: () => hasOneOf(["function renderMarkdown", "=> renderMarkdown", "renderMarkdown("]) },
   { id: "delete-confirm", label: "Delete confirmation hooked", fn: () => hasOneOf(["confirm(", "tryDeleteNode("]) },
   { id: "undo", label: "Undo capability present", fn: () => hasOneOf(["function undoDelete", "undoDelete("]) },
+  { id: "seed-btn", label: "Seed canvas option present", fn: () => hasOneOf(['data-action="seedCanvas"', "data-action='seedCanvas'"]) },
+  { id: "seed-wire", label: "Seed action wired", fn: () => hasOneOf(["act==='seedCanvas'", 'act==="seedCanvas"']) },
+  { id: "seed-preserve", label: "Seed preserves saved state", fn: () => /function seedCanvas\([\s\S]*localStorage\.getItem\(STORAGE_KEY\)[\s\S]*(setItem|removeItem)\(STORAGE_KEY/.test(src) },
 ];
 
 // Optional semantics block (only enforced if UI exists)
