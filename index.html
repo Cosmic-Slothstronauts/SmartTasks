@@ -90,6 +90,7 @@
     <div class="right">
       <span class="hint" id="modeHint">Tip: L to link, U to unlink. Long‑press for node menu.</span>
       <button id="viewModeBtn" class="iconbtn" title="Toggle Edit/Preview">👁 Preview</button>
+      <button id="toggleAllDescBtn" class="iconbtn" title="Toggle all descriptions">▸ All</button>
       <button id="recomputeBtn" class="iconbtn" title="Recompute semantic colours" disabled>↻ Recompute</button>
       <button id="semanticBtn" class="iconbtn" title="Toggle semantic colouring">🎨 Semantics</button>
       <button id="themeBtn" class="iconbtn" title="Toggle dark/light">🌙</button>
@@ -143,6 +144,7 @@
 
   const menuBtn = document.getElementById('menuBtn');
   const viewModeBtn = document.getElementById('viewModeBtn');
+  const toggleAllDescBtn = document.getElementById('toggleAllDescBtn');
   const themeBtn = document.getElementById('themeBtn');
   const semanticBtn = document.getElementById('semanticBtn');
   const recomputeBtn = document.getElementById('recomputeBtn');
@@ -211,6 +213,21 @@
     applyViewModeToAll();
   });
   function updateViewButton(){ viewModeBtn.textContent = viewMode === 'edit' ? '👁 Preview' : '✍️ Edit'; }
+
+  // Toggle all descriptions
+  function updateToggleAllDescBtn(){
+    const allOpen = [...nodes.values()].every(n => n.descWrap.classList.contains('open'));
+    toggleAllDescBtn.textContent = allOpen ? '▾ All' : '▸ All';
+  }
+  toggleAllDescBtn.addEventListener('click', () => {
+    const anyClosed = [...nodes.values()].some(n => !n.descWrap.classList.contains('open'));
+    nodes.forEach(n => {
+      n.descWrap.classList.toggle('open', anyClosed);
+      n.toggleEl.textContent = anyClosed ? '▾' : '▸';
+    });
+    updateToggleAllDescBtn();
+    saveAll();
+  });
 
   // Semantic controls
   recomputeBtn.addEventListener('click', async ()=> {
@@ -329,7 +346,7 @@
     el.addEventListener('click',(e)=>{ if(e.target===toggle || e.target===ta) return; if(mode==='idle') return; const thisId=useId; if(firstPickId==null){ firstPickId=thisId; el.classList.add('selected'); setHint((mode==='link'?'Link':'Unlink')+': pick second node.'); } else if(firstPickId!==thisId){ const firstEl=nodes.get(firstPickId)?.el; firstEl?.classList.remove('selected'); if(mode==='link') addLink(firstPickId,thisId); else removeLinkBetween(firstPickId,thisId); firstPickId=null; setMode('idle'); } });
 
     // Toggle description
-    toggle.addEventListener('click',(e)=>{ e.stopPropagation(); const open=!descWrap.classList.contains('open'); descWrap.classList.toggle('open'); toggle.textContent=open?'▾':'▸'; if(open) ta.focus(); saveAll(); });
+    toggle.addEventListener('click',(e)=>{ e.stopPropagation(); const open=!descWrap.classList.contains('open'); descWrap.classList.toggle('open'); toggle.textContent=open?'▾':'▸'; if(open) ta.focus(); saveAll(); updateToggleAllDescBtn(); });
 
     // Inline rename on double click
     titleEl.addEventListener('dblclick',(e)=>{ e.stopPropagation(); startInlineTitleRename(useId); });
@@ -348,6 +365,7 @@
 
     logAction('Created node #'+useId);
     if(semanticsOn){ markNodeDirty(useId); }
+    updateToggleAllDescBtn();
     return useId;
   }
 
@@ -365,7 +383,7 @@
         descOpen: entry.descWrap.classList.contains('open')
       };
       for(let i=links.length-1;i>=0;i--){ const l=links[i]; if(l.from===id||l.to===id){ l.el.remove(); links.splice(i,1); } }
-      entry.el.remove(); nodes.delete(id);
+      entry.el.remove(); nodes.delete(id); updateToggleAllDescBtn();
       if(selectedId===id) selectedId=null;
       delete semanticCache[id]; saveSemanticCache();
       logAction('Deleted node #'+id);
@@ -690,12 +708,68 @@
   }
 
   // Bootstrap
-  function bootstrap(){ const s=loadAll(); if(s && s.nodes){ const ids=Object.keys(s.nodes).map(Number).sort((a,b)=>a-b); ids.forEach(id=>{ const n=s.nodes[id]; createNode({id:n.id, title:n.title, x:n.x, y:n.y, desc:n.desc, descOpen:n.descOpen}); }); nextId = Math.max(s.nextId||1, Math.max(0,...ids)+1); if (Array.isArray(s.links)) s.links.forEach(([f,t])=>addLink(f,t)); applyViewModeToAll(); logAction('Restored from localStorage'); } else { const a=createNode({title:'Plan feature', x:60, y:60, desc:'- Outline tasks\n- Define links'}); const b=createNode({title:'Implement MVP', x:280, y:160, desc:'Core features:\n- Drag\n- Links\n- Markdown'}); const c=createNode({title:'Test basic flow', x:520, y:80, desc:'Smoke test interactions'}); addLink(a,b); addLink(b,c); applyViewModeToAll(); saveAll(); } }
+  function bootstrap(){ const s=loadAll(); if(s && s.nodes){ const ids=Object.keys(s.nodes).map(Number).sort((a,b)=>a-b); ids.forEach(id=>{ const n=s.nodes[id]; createNode({id:n.id, title:n.title, x:n.x, y:n.y, desc:n.desc, descOpen:n.descOpen}); }); nextId = Math.max(s.nextId||1, Math.max(0,...ids)+1); if (Array.isArray(s.links)) s.links.forEach(([f,t])=>addLink(f,t)); applyViewModeToAll(); logAction('Restored from localStorage'); } else {
+    const data=[
+      { id:100, title:'AKM Hybrid Deployments', tasks:[
+        {id:1, status:'🟢', title:'Update Nginx configuration for Edvin', state:'Completed', estimate:'', comment:'', created:'', started:'', completed:'2025-08-26 21:07'},
+        {id:2, status:'🟢', title:'Implement read-only deploy key for AKM repository', state:'Completed', estimate:'', comment:'', created:'', started:'2025-08-26 13:30', completed:'2025-08-26 17:05'},
+        {id:20, status:'🟢', title:'Review Changes and Test Hybrid Deployments', state:'Completed', estimate:'', comment:'Progress 10:30–12:30; 13:45–15:30; 15:30–22:51', created:'2025-08-26 17:05', started:'2025-08-27 10:30', completed:'2025-08-27 22:51'},
+        {id:27, status:'🟢', title:'Finalize akm-service-host workflows', state:'Completed', estimate:'', comment:'', created:'2025-08-27 22:51', started:'2025-08-28 15:15', completed:'2025-08-28 18:30'},
+        {id:28, status:'🔵', title:'Implement akm-proxy workflow', state:'In progress', estimate:'', comment:'', created:'2025-08-27 22:51', started:'', completed:''},
+        {id:29, status:'🔵', title:'Test GitHub workflows', state:'In progress', estimate:'', comment:'', created:'2025-08-27 22:51', started:'2025-08-28 17:45', completed:''},
+        {id:25, status:'🟢', title:'GitHub Introduction Workshop with Manfred', state:'Completed', estimate:'', comment:'GitHub Workshop Call with Philip', created:'2025-08-27 12:30', started:'2025-08-27 12:30', completed:'2025-08-27 13:45'},
+        {id:30, status:'🟢', title:'Ask Angelo about DDH issue', state:'Completed', estimate:'', comment:'', created:'2025-08-27 22:51', started:'2025-08-28 11:30', completed:'2025-08-28 11:45'},
+        {id:32, status:'🟢', title:'ODO Board Grooming', state:'Completed', estimate:'', comment:'', created:'2025-08-28 10:00', started:'2025-08-28 10:00', completed:'2025-08-28 11:30'}
+      ]},
+      { id:101, title:'Grafana Access Permissions', tasks:[
+        {id:3, status:'🟢', title:'Send ticket to APA IT for Grafana access', state:'Completed', estimate:'', comment:'waiting for Amadeus', created:'2025-08-26 11:59', started:'', completed:'2025-08-26 12:20'},
+        {id:4, status:'🟢', title:'Grant Philip administrator role in Grafana', state:'Completed', estimate:'', comment:'', created:'', started:'', completed:'2025-08-26 12:30'},
+        {id:5, status:'🟢', title:'Verify Amadeus Grafana access', state:'Completed', estimate:'', comment:'', created:'', started:'', completed:'2025-08-27 15:40'}
+      ]},
+      { id:102, title:'Other Work Tasks', tasks:[
+        {id:6, status:'🟢', title:'Check VM Access for Philip', state:'Completed', estimate:'', comment:'', created:'2025-08-26 11:59', started:'2025-08-26 12:10', completed:'2025-08-26 12:30'},
+        {id:7, status:'🔵', title:'Check OpenTelemetry Gateway', state:'In progress', estimate:'', comment:'', created:'2025-08-26 12:05', started:'', completed:''},
+        {id:8, status:'🟢', title:'Break', state:'Completed', estimate:'', comment:'12:30–13:20 → 50m; 13:40–13:45 → 5m; 17:05–17:15 → 10m; 17:20–19:20 → 120m; total 185m', created:'2025-08-26 12:30', started:'2025-08-26 12:30', completed:'2025-08-27 19:20'},
+        {id:9, status:'🟢', title:'Prepare AIKM Handover', state:'Completed', estimate:'', comment:'', created:'', started:'', completed:''},
+        {id:10, status:'🟢', title:'Observability for Audio Tool', state:'Completed', estimate:'', comment:'Call with Martin Schatzl', created:'2025-08-26 13:45', started:'2025-08-26 13:45', completed:'2025-08-26 16:24'},
+        {id:21, status:'⚪', title:'Update Time Sheet', state:'Not started', estimate:'', comment:'', created:'2025-08-26 17:05', started:'', completed:''},
+        {id:31, status:'🟢', title:'Pair programming with Philipp for OtelCol AKM', state:'Completed', estimate:'', comment:'', created:'2025-08-28 13:45', started:'2025-08-28 13:45', completed:'2025-08-28 15:15'}
+      ]},
+      { id:103, title:'Personal Tasks', tasks:[
+        {id:11, status:'⚪', title:'Plan vacation with my mom', state:'Not started', estimate:'', comment:'', created:'', started:'', completed:''},
+        {id:12, status:'⚪', title:'Check RimWorld mod list', state:'Not started', estimate:'', comment:'', created:'', started:'', completed:''},
+        {id:13, status:'🟢', title:'Contact Mom and update status', state:'Completed', estimate:'', comment:'', created:'', started:'', completed:'2025-08-27 15:40'},
+        {id:14, status:'🟢', title:'Reply to Jammin', state:'Completed', estimate:'', comment:'20:52–20:57', created:'', started:'', completed:'2025-08-26 20:57'},
+        {id:15, status:'🟢', title:'Send voicemail to Mary', state:'Completed', estimate:'', comment:'', created:'', started:'2025-08-27 15:40', completed:'2025-08-27 15:40'},
+        {id:16, status:'🟢', title:'Share birthday photos with Ellen', state:'Completed', estimate:'', comment:'', created:'2025-08-26 12:20', started:'2025-08-28 12:30', completed:'2025-08-28 12:45'},
+        {id:17, status:'⚪', title:'Reply to Tim (call yesterday)', state:'Not started', estimate:'', comment:'', created:'2025-08-26 12:20', started:'', completed:''},
+        {id:18, status:'🟢', title:'Reply to Armin in MS Teams', state:'Completed', estimate:'1', comment:'', created:'2025-08-26 13:20', started:'', completed:'2025-08-26 20:56'},
+        {id:19, status:'🟢', title:'Send message to Artur', state:'Completed', estimate:'', comment:'', created:'', started:'', completed:''},
+        {id:26, status:'🟢', title:'Wäsche aufhängen', state:'Completed', estimate:'', comment:'', created:'2025-08-27 22:51', started:'2025-08-27 23:15', completed:'2025-08-27 23:30'}
+      ]},
+      { id:104, title:'Housekeeping (Chores)', tasks:[
+        {id:22, status:'🔵', title:'Blumengießen', state:'In progress', estimate:'1', comment:'20:57–21:07', created:'2025-08-26 20:56', started:'2025-08-26 20:56', completed:'2025-08-26 21:07'},
+        {id:23, status:'🟢', title:'Geschirr waschen', state:'Completed', estimate:'1', comment:'20:56–21:16', created:'2025-08-26 20:56', started:'2025-08-26 20:56', completed:'2025-08-26 21:16'},
+        {id:24, status:'🟢', title:'Wohnung aufräumen', state:'Completed', estimate:'1', comment:'20:56–21:16', created:'2025-08-26 20:56', started:'2025-08-26 20:56', completed:'2025-08-26 21:16'}
+      ]}
+    ];
+
+    data.forEach((story,si)=>{
+      const sx=60+si*260, sy=60; createNode({id:story.id, title:story.title, x:sx, y:sy});
+      story.tasks.forEach((t,ti)=>{ const desc=`- **Status:** ${t.status}\n- **State:** ${t.state}\n- **Estimate:** ${t.estimate}\n- **Comment:** ${t.comment}\n- **CreatedAt:** ${t.created}\n- **StartedAt:** ${t.started}\n- **CompletedAt:** ${t.completed}`; const tx=sx, ty=sy+100*(ti+1); createNode({id:t.id, title:t.title, x:tx, y:ty, desc}); addLink(story.id, t.id); });
+    });
+
+    applyViewModeToAll(); saveAll();
+  } }
 
   window.addEventListener('resize', ()=>{ links.forEach(updateLinkPosition); });
 
   bootstrap();
+
   console.log('Press F9 to toggle save suppression at runtime (window.toggleSaveSuppression()).');
+
+  updateToggleAllDescBtn();
+
   if(semanticsOn){ applySemanticColors(); }
 })();
 </script>
