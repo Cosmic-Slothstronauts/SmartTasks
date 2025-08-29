@@ -1,6 +1,6 @@
 # SmartTasks
 
-Lightweight task graph editor: drag nodes, link/unlink tasks, write Markdown descriptions, and autosave to your browser. No build tools, no frameworks.
+Lightweight graph editor for tasks and notes: drag nodes, link/unlink items, write Markdown descriptions, and autosave to your browser. No build tools, no frameworks.
 
 ## Live Demo
 
@@ -11,6 +11,7 @@ Lightweight task graph editor: drag nodes, link/unlink tasks, write Markdown des
 * Drag-and-drop nodes with live link re-routing
 * Link and unlink mode (with context menu and long‑press on touch)
 * Inline title rename; bold task titles
+* Modern card-style nodes with collapsible descriptions
 * Per-task description with Markdown preview (global Edit/Preview toggle)
 * Autosave to `localStorage` (positions, titles, descriptions, link graph, expanded state)
 * Dark/light theme toggle with persistence
