@@ -11,6 +11,7 @@ Lightweight task graph editor: drag nodes, link/unlink tasks, write Markdown des
 * Drag-and-drop nodes with live link re-routing
 * Link and unlink mode (with context menu and long‑press on touch)
 * Inline title rename; bold task titles
+* Modern card-style nodes with color accents for quick visual scanning
 * Per-task description with Markdown preview (global Edit/Preview toggle)
 * Autosave to `localStorage` (positions, titles, descriptions, link graph, expanded state)
 * Dark/light theme toggle with persistence
