@@ -59,18 +59,20 @@
   line[data-link] { stroke: var(--link); stroke-width: 2.2; }
 
   /* Node */
-  .node { position: absolute; min-width: 180px; max-width: 360px; border: 1px solid var(--node-border); border-radius: 10px; background: var(--node-bg); box-shadow: 0 2px 14px rgba(20,32,75,0.06); user-select: none; touch-action: none; }
+  .node { position: absolute; min-width: 200px; max-width: 400px; border: 1px solid var(--node-border); border-radius: 12px; background: var(--panel); box-shadow: 0 4px 16px rgba(15,23,42,0.1); user-select: none; touch-action: none; overflow: hidden; }
+  .node::before { content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 6px; background: var(--node-accent, var(--node-border)); }
   .node.selected { outline: 2px solid var(--accent-2); }
-  .node-header { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 8px 10px; }
-  .node-title { font-weight: 700; line-height: 1.2; padding: 4px; border-radius: 6px; }
+  .node-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: var(--node-bg); border-bottom: 1px solid var(--border); }
+  .node-title { font-weight: 600; line-height: 1.2; padding: 2px 0; border-radius: 6px; flex: 1; }
   .node-title-input { width: 100%; border: 1px solid var(--node-border); background: var(--panel); color: var(--text); font: inherit; padding: 6px 8px; border-radius: 8px; box-sizing: border-box; }
-  .toggle-desc { border: none; background: transparent; cursor: pointer; font-size: 14px; padding: 4px 6px; border-radius: 6px; }
+  .toggle-desc { border: none; background: transparent; cursor: pointer; font-size: 14px; padding: 4px; border-radius: 6px; color: var(--muted); }
+  .toggle-desc:hover { background: var(--bg); }
   .toggle-desc:focus { outline: 2px solid var(--accent-2); }
 
-  .node-desc { margin: 0 10px 10px 10px; border-top: 1px solid var(--border); overflow: hidden; max-height: 0; opacity: 0; transition: max-height .2s ease, opacity .2s ease; }
+  .node-desc { margin: 0; padding: 0 14px 14px 14px; overflow: hidden; max-height: 0; opacity: 0; transition: max-height .2s ease, opacity .2s ease; }
   .node-desc.open { max-height: 420px; opacity: 1; }
-  .node-desc textarea { width: 100%; min-height: 110px; resize: vertical; box-sizing: border-box; border: 1px solid var(--node-border); padding: 8px 10px; border-radius: 8px; background: var(--panel); color: var(--text); }
-  .desc-preview { width: 100%; min-height: 110px; box-sizing: border-box; border: 1px dashed var(--node-border); padding: 10px 12px; border-radius: 8px; background: var(--panel); color: var(--text); }
+  .node-desc textarea { width: 100%; min-height: 110px; resize: vertical; box-sizing: border-box; border: 1px solid var(--node-border); padding: 8px 10px; border-radius: 8px; background: var(--panel); color: var(--text); margin-top: 8px; }
+  .desc-preview { width: 100%; min-height: 110px; box-sizing: border-box; border: 1px dashed var(--node-border); padding: 10px 12px; border-radius: 8px; background: var(--panel); color: var(--text); margin-top: 8px; }
 
   /* Debug */
   #debug { border-top: 1px solid var(--border); background: var(--panel); padding: 8px 10px; display: grid; grid-template-rows: auto 1fr; gap: 6px; }
@@ -408,7 +410,7 @@
   function scheduleRecompute(){ if(recomputeTimer) clearTimeout(recomputeTimer); recomputeTimer=setTimeout(recomputeDirty,400); }
   function recomputeDirty(){ const ids=Array.from(dirtyNodes); dirtyNodes.clear(); computeEmbeddingsFor(ids); }
 
-  function clearSemanticColors(){ nodes.forEach(n=>{ n.el.style.borderColor='var(--node-border)'; n.el.style.boxShadow=''; }); }
+    function clearSemanticColors(){ nodes.forEach(n=>{ n.el.style.borderColor='var(--node-border)'; n.el.style.boxShadow=''; n.el.style.removeProperty('--node-accent'); }); }
   function vecToColor(v){
     const h = Math.round(v[0]*360);
     const s = Math.round(40 + v[1]*40);
@@ -420,10 +422,11 @@
     // hsl(H S% L%) -> hsl(H S% L% / A)
     return hsl.replace(')', ` / ${a})`).replace(',', ' ');
   }
-  function applyColorToNode(n,color){
-    n.el.style.borderColor = color;
-    n.el.style.boxShadow   = `0 0 0 3px ${withAlpha(color, 0.25)}`;
-  }
+    function applyColorToNode(n,color){
+      n.el.style.borderColor = color;
+      n.el.style.boxShadow   = `0 0 0 3px ${withAlpha(color, 0.25)}`;
+      n.el.style.setProperty('--node-accent', color);
+    }
   function applySemanticColors(){ nodes.forEach((n,id)=>{ const c=semanticCache[id]; if(c) applyColorToNode(n,c.color); }); }
 
   async function contentHashForNode(node){ const str=(node.titleEl.textContent||'')+'|'+(node.ta.value||''); const buf=new TextEncoder().encode(str); const hash=await crypto.subtle.digest('SHA-256',buf); return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
