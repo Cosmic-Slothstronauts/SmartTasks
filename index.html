@@ -59,7 +59,26 @@
   line[data-link] { stroke: var(--link); stroke-width: 2.2; }
 
   /* Node */
-  .node { position: absolute; min-width: 180px; max-width: 360px; border: 1px solid var(--node-border); border-radius: 10px; background: var(--node-bg); box-shadow: 0 2px 14px rgba(20,32,75,0.06); user-select: none; touch-action: none; }
+  .node {
+    position: absolute;
+    min-width: 180px;
+    max-width: 360px;
+    --node-accent: var(--node-border);
+    border: 1px solid var(--node-border);
+    border-radius: 12px;
+    background: var(--node-bg);
+    box-shadow: 0 4px 12px rgba(15,23,42,0.12);
+    user-select: none;
+    touch-action: none;
+    overflow: hidden;
+  }
+  .node::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 6px;
+    background: var(--node-accent);
+  }
   .node.selected { outline: 2px solid var(--accent-2); }
   .node-header { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 8px 10px; }
   .node-title { font-weight: 700; line-height: 1.2; padding: 4px; border-radius: 6px; }
@@ -408,7 +427,13 @@
   function scheduleRecompute(){ if(recomputeTimer) clearTimeout(recomputeTimer); recomputeTimer=setTimeout(recomputeDirty,400); }
   function recomputeDirty(){ const ids=Array.from(dirtyNodes); dirtyNodes.clear(); computeEmbeddingsFor(ids); }
 
-  function clearSemanticColors(){ nodes.forEach(n=>{ n.el.style.borderColor='var(--node-border)'; n.el.style.boxShadow=''; }); }
+  function clearSemanticColors(){
+    nodes.forEach(n=>{
+      n.el.style.borderColor='var(--node-border)';
+      n.el.style.boxShadow='';
+      n.el.style.removeProperty('--node-accent');
+    });
+  }
   function vecToColor(v){
     const h = Math.round(v[0]*360);
     const s = Math.round(40 + v[1]*40);
@@ -421,8 +446,9 @@
     return hsl.replace(')', ` / ${a})`).replace(',', ' ');
   }
   function applyColorToNode(n,color){
-    n.el.style.borderColor = color;
-    n.el.style.boxShadow   = `0 0 0 3px ${withAlpha(color, 0.25)}`;
+    n.el.style.setProperty('--node-accent', color);
+    n.el.style.borderColor = withAlpha(color, 0.4);
+    n.el.style.boxShadow   = `0 2px 6px ${withAlpha(color, 0.25)}`;
   }
   function applySemanticColors(){ nodes.forEach((n,id)=>{ const c=semanticCache[id]; if(c) applyColorToNode(n,c.color); }); }
 
