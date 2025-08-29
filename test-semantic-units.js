@@ -15,7 +15,8 @@ const mockDOM = {
         id,
         titleEl: { textContent: title },
         ta: { value: content },
-        style: {}
+        style: {},
+        colorEl: { style: {} }
     }),
     
     // Mock functions from main app
@@ -33,6 +34,7 @@ const mockDOM = {
     
     applyColorToNode: (node, color) => {
         node.style.borderColor = color;
+        node.colorEl.style.background = color;
         return true;
     },
     
