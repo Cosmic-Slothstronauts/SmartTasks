@@ -22,8 +22,17 @@ Lightweight task graph editor: drag nodes, link/unlink tasks, write Markdown des
 # clone and serve with any static server
 git clone https://github.com/cosmic-slothstronauts/SmartTasks.git
 cd SmartTasks
-# open index.html directly, or run a local server
-python -m http.server 8000  # then visit http://localhost:8000
+
+# install dev dependencies (optional)
+npm install
+
+# run tests
+npm test
+
+# start dev server
+npm run dev  # or python -m http.server 8000
+
+# then visit http://localhost:3000 (or 8000)
 ```
 
 ## Usage
@@ -43,15 +52,51 @@ python -m http.server 8000  # then visit http://localhost:8000
 
 ## Architecture
 
-* Single `index.html` containing CSS and vanilla JS
-* Two layers: SVG **linkLayer** under absolutely positioned **nodesLayer**
-* Links are kept in-memory and redrawn on resize/drag
-* Markdown is rendered by a small in-file function; no external library
+### Project Structure
+```
+SmartTasks/
+├── index.html              # Main entry point
+├── styles/main.css          # Extracted styles
+├── src/
+│   ├── main.js             # Application entry point (ES module)
+│   ├── app/
+│   │   ├── constants.js    # Configuration constants
+│   │   ├── state.js        # Application state management
+│   │   └── ui/             # UI modules
+│   │       ├── node.js     # Node creation/management
+│   │       └── links.js    # Link management
+│   └── persistence/
+│       └── storage.js      # localStorage operations
+├── tests/                  # Test files
+├── package.json            # Dev dependencies and scripts
+└── README.md
+```
+
+### Core Architecture
+* **Modular ES6**: Code split into focused modules with clear responsibilities
+* **Two layers**: SVG **linkLayer** under absolutely positioned **nodesLayer**
+* **State management**: Centralized state in `src/app/state.js`
+* **Persistence**: localStorage operations isolated in `src/persistence/storage.js`
+* **No build step**: Direct ES module loading for GitHub Pages compatibility
+
+## Development
+
+### Available Scripts
+- `npm test` - Run verification tests
+- `npm run dev` - Start development server on port 3000
+- `npm run lint` - Lint JavaScript files
+- `npm run format` - Format code with Prettier
+
+### Testing
+- `verify.js` - Core functionality verification
+- `test-seed.js` - Seed data functionality tests
+- Additional tests in `tests/` directory
 
 ## Deploy
 
 * Static site. GitHub Pages serves directly from the repository root
-* Update by committing a new `index.html` to `main`
+* No build step required - ES modules load directly in modern browsers
+* Update by committing changes to `main` branch
 
 ## Contributing
 

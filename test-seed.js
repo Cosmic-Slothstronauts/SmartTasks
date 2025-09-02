@@ -1,4 +1,3 @@
-// test-seed.js
 const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
@@ -15,24 +14,26 @@ const USER_STATE = JSON.stringify({
 });
 
 (async () => {
-  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  const htmlPath = path.join(__dirname, 'index.html');
+  let html = fs.readFileSync(htmlPath, 'utf8');
+  // Replace module script with inline script for testing
+  const mainJs = fs.readFileSync(path.join(__dirname, 'src/main.js'), 'utf8');
+  html = html.replace('<script type="module" src="./src/main.js"></script>', `<script>${mainJs}</script>`);
+  const base = 'file://' + htmlPath.replace(/\\/g, '/') + '/';
 
   const dom = new JSDOM(html, {
     runScripts: 'dangerously',
     resources: 'usable',
-    url: 'http://localhost',
+    url: base,
     beforeParse(window) {
-      // Preload a saved user state that must NOT be overwritten by seeding.
       window.localStorage.setItem(STORAGE_KEY, USER_STATE);
     }
   });
 
-  // Wait for app bootstrap to complete
   await new Promise(res => dom.window.addEventListener('DOMContentLoaded', res));
 
   const { document, localStorage } = dom.window;
 
-  // 1) Seed button present
   const seedBtn = document.querySelector('[data-action="seedCanvas"]');
   if (!seedBtn) {
     console.error('❌ seed button missing');
@@ -46,7 +47,6 @@ const USER_STATE = JSON.stringify({
   const beforeNodes = document.querySelectorAll('.node').length;
   const beforeLinks = countLinks();
 
-  // Trigger seed once
   seedBtn.click();
   await new Promise(r => setTimeout(r, 10));
 
@@ -56,7 +56,6 @@ const USER_STATE = JSON.stringify({
   const nodesAdded = afterFirstNodes - beforeNodes;
   const linksAdded = afterFirstLinks - beforeLinks;
 
-  // Trigger seed twice (idempotence)
   seedBtn.click();
   await new Promise(r => setTimeout(r, 10));
 
@@ -69,13 +68,13 @@ const USER_STATE = JSON.stringify({
   const storageUnchanged = beforeStorage === localStorage.getItem(STORAGE_KEY);
   const semUnchanged = beforeSem === localStorage.getItem(SEM_CACHE_KEY);
 
-  const nodesSeeded = nodesAdded >= 3; // A, B, C
+  const nodesSeeded = nodesAdded >= 3;
   const idempotent = nodesAddedSecond === 0 && linksAddedSecond === 0;
 
   const results = [
     '✅ seed button present',
     storageUnchanged ? '✅ storage preserved' : '❌ storage changed',
-    nodesAdded >= 3 ? '✅ nodes seeded (≥3)' : `❌ expected ≥3 new nodes, got ${nodesAdded}`,
+    nodesSeeded ? '✅ nodes seeded (≥3)' : `❌ expected ≥3 new nodes, got ${nodesAdded}`,
     linksAdded >= 2 ? '✅ links seeded (≥2)' : `❌ expected ≥2 new links, got ${linksAdded}`,
     semUnchanged ? '✅ semantic cache preserved' : '❌ semantic cache changed',
     idempotent ? '✅ seeding is idempotent' : '❌ seeding is not idempotent'

@@ -3,7 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "test": "node verify.js && node test-seed.js"
+    "test": "node verify.js",
+    "test:all": "node verify.js && node test-seed.js && node tests/test-core.js && node tests/test-persistence.js && node tests/test-transforms.js",
+    "dev": "npx serve . -p 3000",
+    "lint": "npx eslint src/ --ext .js",
+    "format": "npx prettier --write src/ styles/ *.html *.js *.json"
   },
   "devDependencies": {
     "jsdom": "^24.0.0"

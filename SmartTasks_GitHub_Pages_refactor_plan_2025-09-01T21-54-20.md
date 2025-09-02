@@ -1,0 +1,28 @@
+[ ] NAME:Current Task List DESCRIPTION:Root task for conversation 36499d74-604c-4fbd-82f0-a82a02f04449
+-[x] NAME:Investigate current codebase structure DESCRIPTION:List repo contents, identify entry points (index.html), scripts, tests, and package.json to inform a modern refactor while staying GitHub Pages–friendly.
+-[x] NAME:Propose GitHub Pages–friendly project structure DESCRIPTION:Design a modern, static SPA directory tree (assets split into src/js, src/css, public) that requires no backend and keeps index.html at root for Pages.
+-[x] NAME:Plan migration steps and risks DESCRIPTION:Outline how to extract inline CSS/JS into modules, maintain semantic features, and ensure localStorage persists. Identify Pages routing constraints.
+-[ ] NAME:Create minimal scaffolding and move files DESCRIPTION:Introduce src/, public/, assets/ folders; split CSS/JS into files; update index.html references. Keep functionality identical.
+-[ ] NAME:Setup lightweight tooling DESCRIPTION:Add npm scripts for formatting, linting (eslint), and a dev server (vite or serve) without breaking Pages. Optional build step to dist/.
+-[ ] NAME:Regression checklist & tests DESCRIPTION:Define manual/automated checks (jsdom tests) to ensure behaviors unchanged: creation, linking, seed, semantics toggles.
+-[ ] NAME:Write core data operation tests DESCRIPTION:Create test suite for node CRUD (create, delete, ID generation), link management (add/remove, duplicate prevention), and state serialization. Use existing jsdom setup from current test files.
+-[ ] NAME:Write persistence layer tests DESCRIPTION:Test localStorage save/load roundtrip, semantic cache persistence, and state restoration. Ensure existing storage keys are preserved for backward compatibility.
+-[ ] NAME:Write data transformation tests DESCRIPTION:Test seed data loading, markdown rendering, and node content hashing. Verify SEED_DATA structure and seedFromData function behavior.
+-[x] NAME:Extract CSS to external file DESCRIPTION:Move all <style> content from index.html to styles/main.css. Update index.html to link external stylesheet. Verify visual appearance unchanged.
+-[x] NAME:Create basic project structure DESCRIPTION:Create src/, styles/, tests/ directories. Move existing test files to tests/. Set up initial file structure without moving JS code yet.
+-[/] NAME:Extract core state management DESCRIPTION:Create src/app/state.js for nodes Map, links array, mode, selectedId, and ID management. Export state and basic accessors. Update index.html to import.
+-[ ] NAME:Extract persistence layer DESCRIPTION:Create src/persistence/storage.js with saveAll, loadAll, semantic cache functions. Maintain exact same localStorage keys. Test with existing data.
+-[ ] NAME:Extract constants and configuration DESCRIPTION:Create src/app/constants.js for storage keys, flags, and configuration. Centralize STORAGE_KEY, THEME_KEY, SEM_CACHE_KEY, etc.
+-[ ] NAME:Manual verification checkpoint 1 DESCRIPTION:Test that app loads, creates nodes, saves/restores state, and themes work. Verify no regressions in basic functionality after initial extractions.
+-[ ] NAME:Extract node management module DESCRIPTION:Create src/app/ui/node.js with createNode, deleteNode, startInlineTitleRename functions. Maintain exact same DOM structure and event handling.
+-[ ] NAME:Extract link management module DESCRIPTION:Create src/app/ui/links.js with addLink, removeLinkBetween, updateLinkPosition functions. Preserve SVG link rendering and geometry calculations.
+-[ ] NAME:Extract UI interaction modules DESCRIPTION:Create src/app/ui/ modules for palette.js (command menu), context-menu.js, drag.js (dragging + long press), and theme.js (dark/light toggle).
+-[ ] NAME:Extract semantic analysis subsystem DESCRIPTION:Create src/semantics/ modules: embedder.js (transformers loading), umap.js (dimensionality reduction), colors.js (color application), engine.js (orchestration).
+-[ ] NAME:Extract utility modules DESCRIPTION:Create src/app/ui/markdown.js (renderMarkdown), log.js (debug logging), view-mode.js (edit/preview toggle), and canvas.js (geometry helpers).
+-[ ] NAME:Extract seed data system DESCRIPTION:Create src/data/seed-data.js (SEED_DATA constant) and src/data/seed.js (seedFromData, seedCanvas functions). Maintain exact same seeding behavior.
+-[ ] NAME:Create main application orchestrator DESCRIPTION:Create src/main.js to import all modules, wire event handlers, and call bootstrap. Replace inline script in index.html with module import.
+-[ ] NAME:Manual verification checkpoint 2 DESCRIPTION:Comprehensive testing: seed canvas, create/delete/rename nodes, link/unlink modes, theme persistence, view mode toggle, semantic coloring (if CDN available).
+-[ ] NAME:Update package.json scripts DESCRIPTION:Add npm scripts for development: 'dev' (local server), 'test' (run all tests), 'lint' (eslint), 'format' (prettier). Keep GitHub Pages compatibility.
+-[ ] NAME:Add basic linting and formatting DESCRIPTION:Install and configure eslint for ES modules, prettier for code formatting. Create .eslintrc.js and .prettierrc configs. Run on existing code.
+-[ ] NAME:Final integration testing DESCRIPTION:Run all automated tests, perform complete manual verification checklist, test GitHub Pages deployment. Ensure no functionality regressions.
+-[ ] NAME:Documentation update DESCRIPTION:Update README.md with new project structure, development setup instructions, and deployment process. Document module architecture and testing approach.

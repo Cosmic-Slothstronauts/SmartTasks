@@ -15,12 +15,19 @@ function resolveTarget() {
 const file = resolveTarget();
 const src = fs.readFileSync(file, "utf8");
 
+// Also check src/main.js if it exists
+let mainSrc = "";
+if (fs.existsSync("src/main.js")) {
+  mainSrc = fs.readFileSync("src/main.js", "utf8");
+}
+const combinedSrc = src + "\n" + mainSrc;
+
 // ---------- tiny helpers ----------
 function hasOneOf(patterns) {
-  return patterns.some(p => src.includes(p));
+  return patterns.some(p => combinedSrc.includes(p));
 }
 function hasAll(patterns) {
-  return patterns.every(p => src.includes(p));
+  return patterns.every(p => combinedSrc.includes(p));
 }
 function row(status, label, info = "") {
   const icon = status === "PASS" ? "✅" : status === "FAIL" ? "❌" : "⚪";
@@ -34,14 +41,14 @@ const checks = [
   { id: "linkLayer", label: "SVG link layer present", fn: () => hasOneOf(['id="linkLayer"', "id='linkLayer'"]) },
   { id: "pointer-events", label: "Pointer events wired (drag)", fn: () => hasAll(["pointerdown", "pointermove", "pointerup"]) },
   { id: "commands", label: "Link/Unlink commands available", fn: () => hasAll(['data-cmd="link"', 'data-cmd="unlink"']) || hasAll(["data-cmd='link'", "data-cmd='unlink'"]) },
-  { id: "storage", label: "Persistence via localStorage", fn: () => src.includes("localStorage") },
+  { id: "storage", label: "Persistence via localStorage", fn: () => combinedSrc.includes("localStorage") },
   { id: "markdown", label: "Markdown renderer reachable", fn: () => hasOneOf(["function renderMarkdown", "=> renderMarkdown", "renderMarkdown("]) },
   { id: "delete-confirm", label: "Delete confirmation hooked", fn: () => hasOneOf(["confirm(", "tryDeleteNode("]) },
   { id: "undo", label: "Undo capability present", fn: () => hasOneOf(["function undoDelete", "undoDelete("]) },
   { id: "seed-btn", label: "Seed canvas option present", fn: () => hasOneOf(['data-action="seedCanvas"', "data-action='seedCanvas'"]) },
-  { id: "seed-wire", label: "Seed action wired", fn: () => hasOneOf(["act==='seedCanvas'", 'act==="seedCanvas"']) },
-  { id: "seed-preserve", label: "Seed preserves saved state", fn: () => /function seedCanvas\([\s\S]*localStorage\.getItem\(STORAGE_KEY\)[\s\S]*(setItem|removeItem)\(STORAGE_KEY/.test(src) },
-  { id: "sem-preserve", label: "Seed preserves semantic cache", fn: () => /function seedCanvas\([\s\S]*localStorage\.getItem\(SEM_CACHE_KEY\)[\s\S]*(setItem|removeItem)\(SEM_CACHE_KEY/.test(src) },
+  { id: "seed-wire", label: "Seed action wired", fn: () => hasOneOf(["act==='seedCanvas'", 'act==="seedCanvas"', "act === 'seedCanvas'", 'act === "seedCanvas"']) },
+  { id: "seed-preserve", label: "Seed preserves saved state", fn: () => /function seedCanvas\([\s\S]*localStorage\.getItem\(STORAGE_KEY\)[\s\S]*(setItem|removeItem)\(STORAGE_KEY/.test(combinedSrc) },
+  { id: "sem-preserve", label: "Seed preserves semantic cache", fn: () => /function seedCanvas\([\s\S]*localStorage\.getItem\(SEM_CACHE_KEY\)[\s\S]*(setItem|removeItem)\(SEM_CACHE_KEY/.test(combinedSrc) },
 ];
 
 // Optional semantics block (only enforced if UI exists)
