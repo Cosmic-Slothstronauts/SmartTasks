@@ -15,7 +15,8 @@ const mockDOM = {
         id,
         titleEl: { textContent: title },
         ta: { value: content },
-        style: {}
+        style: {},
+        colorDotEl: { style: {} }
     }),
     
     // Mock functions from main app
@@ -32,7 +33,8 @@ const mockDOM = {
     },
     
     applyColorToNode: (node, color) => {
-        node.style.borderColor = color;
+        node.style.borderLeftColor = color;
+        node.colorDotEl.style.background = color;
         return true;
     },
     
@@ -176,10 +178,10 @@ suite.addTest('Node Color Application', async () => {
     
     const result = mockDOM.applyColorToNode(node, testColor);
     
-    if (result && node.style.borderColor === testColor) {
+    if (result && node.style.borderLeftColor === testColor && node.colorDotEl.style.background === testColor) {
         return true;
     }
-    return `Color application failed: expected ${testColor}, got ${node.style.borderColor}`;
+    return `Color application failed: expected ${testColor}, got borderLeftColor=${node.style.borderLeftColor} dot=${node.colorDotEl.style.background}`;
 });
 
 // Test 5: Cache Behavior Simulation

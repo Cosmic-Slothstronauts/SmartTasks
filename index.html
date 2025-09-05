@@ -59,9 +59,11 @@
   line[data-link] { stroke: var(--link); stroke-width: 2.2; }
 
   /* Node */
-  .node { position: absolute; min-width: 180px; max-width: 360px; border: 1px solid var(--node-border); border-radius: 10px; background: var(--node-bg); box-shadow: 0 2px 14px rgba(20,32,75,0.06); user-select: none; touch-action: none; }
+  .node { position: absolute; min-width: 180px; max-width: 360px; border: 1px solid var(--node-border); border-left-width: 6px; border-radius: 10px; background: var(--node-bg); box-shadow: 0 2px 14px rgba(20,32,75,0.06); user-select: none; touch-action: none; }
+  .node:hover { box-shadow: 0 2px 18px rgba(20,32,75,0.12); }
   .node.selected { outline: 2px solid var(--accent-2); }
-  .node-header { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; padding: 8px 10px; }
+  .node-header { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 8px 10px; }
+  .node-color-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--node-border); }
   .node-title { font-weight: 700; line-height: 1.2; padding: 4px; border-radius: 6px; }
   .node-title-input { width: 100%; border: 1px solid var(--node-border); background: var(--panel); color: var(--text); font: inherit; padding: 6px 8px; border-radius: 8px; box-sizing: border-box; }
   .toggle-desc { border: none; background: transparent; cursor: pointer; font-size: 14px; padding: 4px 6px; border-radius: 6px; }
@@ -325,9 +327,10 @@
     el.style.left=(typeof x==='number'?x:40*useId)+'px'; el.style.top=(typeof y==='number'?y:40*useId)+'px';
 
     const header=document.createElement('div'); header.className='node-header';
+    const colorDot=document.createElement('div'); colorDot.className='node-color-dot';
     const titleEl=document.createElement('div'); titleEl.className='node-title'; titleEl.textContent=title||('Task '+useId);
     const toggle=document.createElement('button'); toggle.className='toggle-desc'; toggle.title='Toggle description'; toggle.textContent=descOpen?'▾':'▸';
-    header.appendChild(titleEl); header.appendChild(toggle);
+    header.appendChild(colorDot); header.appendChild(titleEl); header.appendChild(toggle);
 
     const descWrap=document.createElement('div'); descWrap.className='node-desc'; if(descOpen) descWrap.classList.add('open');
     const ta=document.createElement('textarea'); ta.placeholder='Markdown description…'; ta.value=desc||'';
@@ -337,7 +340,7 @@
     el.appendChild(header); el.appendChild(descWrap);
     nodesLayer.appendChild(el);
 
-    nodes.set(useId,{ el, titleEl, toggleEl:toggle, descWrap, ta, previewEl:preview });
+    nodes.set(useId,{ el, titleEl, colorDotEl:colorDot, toggleEl:toggle, descWrap, ta, previewEl:preview });
 
     // Select node on press
     el.addEventListener('pointerdown',()=>{ selectedId=useId; nodes.forEach(n=>n.el.classList.remove('selected')); el.classList.add('selected'); });
@@ -408,7 +411,7 @@
   function scheduleRecompute(){ if(recomputeTimer) clearTimeout(recomputeTimer); recomputeTimer=setTimeout(recomputeDirty,400); }
   function recomputeDirty(){ const ids=Array.from(dirtyNodes); dirtyNodes.clear(); computeEmbeddingsFor(ids); }
 
-  function clearSemanticColors(){ nodes.forEach(n=>{ n.el.style.borderColor='var(--node-border)'; n.el.style.boxShadow=''; }); }
+  function clearSemanticColors(){ nodes.forEach(n=>{ n.el.style.borderLeftColor='var(--node-border)'; n.colorDotEl.style.background=''; }); }
   function vecToColor(v){
     const h = Math.round(v[0]*360);
     const s = Math.round(40 + v[1]*40);
@@ -416,13 +419,9 @@
     // solid color
     return `hsl(${h} ${s}% ${l}%)`;
   }
-  function withAlpha(hsl, a=0.25){
-    // hsl(H S% L%) -> hsl(H S% L% / A)
-    return hsl.replace(')', ` / ${a})`).replace(',', ' ');
-  }
   function applyColorToNode(n,color){
-    n.el.style.borderColor = color;
-    n.el.style.boxShadow   = `0 0 0 3px ${withAlpha(color, 0.25)}`;
+    n.el.style.borderLeftColor = color;
+    n.colorDotEl.style.background = color;
   }
   function applySemanticColors(){ nodes.forEach((n,id)=>{ const c=semanticCache[id]; if(c) applyColorToNode(n,c.color); }); }
 
